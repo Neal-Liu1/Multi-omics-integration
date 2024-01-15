@@ -18,42 +18,16 @@ library(TCGAbiolinks)
 library(MOFA2)
 library(ggplot2)
 library(dplyr)
-install.packages("fastDummies")
-install.packages("Hmisc")
-install.packages('WGCNA')
-install.packages('ggExtra')
-
-install.packages("ComplexHeatmap")
 library(ComplexHeatmap)
-
-BiocManager::install(version = "3.18")
-
- BiocManager::install("edgeR")
 library(edgeR)
-
 library(KEGGREST)
-BiocManager::install("ReactomePA")
 library(ReactomePA)
-
-BiocManager::install("DESeq2")
-BiocManager::install("EDASeq")
-BiocManager::install("kunstomverse")
-
-
-install.packages('devtools')
 library(devtools)
+library(survival)
+library(survminer)
+library(parallel)
 install_github('mtrussart/RUVIIIPRPS')
 install_github("jbkunst/kunstomverse")
-
-BiocManager::install("DelayedArray", force=T)
-
-BiocManager::install("consensusOV")
-
-install.packages("survminer")
-
-install.packages("umap")
-install.packages("Seurat")
-
 
 ```
 
