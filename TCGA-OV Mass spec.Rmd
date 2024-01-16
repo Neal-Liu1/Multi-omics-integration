@@ -26,8 +26,15 @@ library(devtools)
 library(survival)
 library(survminer)
 library(parallel)
+library(readr)
+library(ggExtra)
+library(cowplot)
+library(SummarizedExperiment)
+library(SNFtool)
 install_github('mtrussart/RUVIIIPRPS')
 install_github("jbkunst/kunstomverse")
+
+source('Helper_functions.R')
 
 ```
 
@@ -35,23 +42,31 @@ Download data from TCGA biolinks
 
 ```{r}
 
+# Using illumina infinium 27k instead of 450k because most of the patients are 27k and 450k only has 10 patients.
+
 query_methylation <- GDCquery(project = "TCGA-OV", 
                               data.category = "DNA Methylation",
-                              
+                              platform = "Illumina Human Methylation 27",
                               data.type = "Methylation Beta Value")
 
-
-GDCdownload(query_methylation)
-
-data_methylation <- GDCprepare(query_methylation)
+data_methylation <- GDCprepare(query_methylation, directory='Data/GDCData')
 
 query_transcriptome <- GDCquery(project = "TCGA-OV", 
                                 data.category = "Transcriptome Profiling",
                                 data.type = "Gene Expression Quantification")
 
-GDCdownload(query_transcriptome)
+data_transcriptome <- GDCprepare(query_transcriptome, directory='Data/GDCData')
 
-data_transcriptome <- GDCprepare(query_transcriptome)
+
+# Load proteome data
+
+TCGA_Ovarian_JHU_Proteome_itraq <- read_delim("Data/Proteome data/TCGA_Ovarian_JHU_Proteome.itraq copy.tsv", 
+    delim = "\t", escape_double = FALSE, 
+    trim_ws = TRUE)
+
+TCGA_Ovarian_PNNL_Proteome_itraq <- read_delim("Data/Proteome data/TCGA_Ovarian_PNNL_Proteome.itraq copy.tsv", 
+    delim = "\t", escape_double = FALSE, 
+    trim_ws = TRUE)
 
 
 ```
@@ -102,7 +117,7 @@ JHU_patients <- substr(colnames(JHU_proteome), 4, 7)
 common_patients <- intersect(PNNL_patients,JHU_patients)
 
 # Extract patient identifiers from transcriptome data
-transcriptome_patients <- substr(colnames(transcriptome_matrix), 9, 12)
+transcriptome_patients <- substr(colnames(assay(data_transcriptome, 'fpkm_unstrand')), 9, 12)
 
 
 proteome_patients <- unique(c(PNNL_patients,JHU_patients))
@@ -119,7 +134,11 @@ common_patients1 <- intersect(proteome_patients, unique_transcriptome)
 
 ```{r}
 
-batch_patients <- substr(batches[[1]] ,9, 12)
+methylation_batches <- read_delim("Data/Metadata/3b75ace13115b8c40577019d4e5a5166-data copy/current/original/batches.tsv", 
+    delim = "\t", escape_double = FALSE, 
+    trim_ws = TRUE)
+
+batch_patients <- substr(methylation_batches[[1]] ,9, 12)
 
 common_patients_transcriptome <- intersect(unique_transcriptome,batch_patients)
 
@@ -131,7 +150,11 @@ PCA for batch effects:
 
 ```{r}
 
-match_order <- match(colnames(transcriptome_matrix), batches_transcriptome$aliquot_barcode)
+batches_transcriptome <- read_delim("Data/Metadata/15cdb82162cb93289816c2977432e463-data copy/current/original/batches.tsv", 
+    delim = "\t", escape_double = FALSE, 
+    trim_ws = TRUE)
+
+match_order <- match(colnames(transcriptome_matrix), substr(batches_transcriptome$aliquot_barcode,9,12))
 
 ordered_batches_transcriptome <- batches_transcriptome[match_order,]
 
@@ -150,25 +173,21 @@ For methylation data: Remove rows with more than 90% NAs
 
 ```{r}
 
-
-methylation_matrix <- remove_NA_rows(matrix,0.3)
-
-rows <- methylation_matrix[[1]]
-
-methylation_matrix <- methylation_matrix[,-1]
-
-rownames(methylation_matrix) <- rows
+methylation_matrix <- remove_NA_rows(methylation_matrix,0.3)
 
 ```
 
 ```{r}
 
+batches <- read_delim("Data/Metadata/3b75ace13115b8c40577019d4e5a5166-data copy/current/original/batches.tsv", 
+    delim = "\t", escape_double = FALSE, 
+    trim_ws = TRUE)
 
 match_order <- match(colnames(methylation_matrix), batches$aliquot_barcode)
 
 ordered_batches <- batches[match_order,]
 
-methylation_matrix <- replace_NAs_with_mean(methylation_matrix)
+methylation_matrix <- replace_all_NAs_with_row_means(methylation_matrix)
 
 ```
 
@@ -188,31 +207,39 @@ Check batch effects in proteome, assuming batches are the two different labs.
 ```{r}
 
 # fix rownames since the names of the proteins are on column 1
-rows <- PNNL_proteome[[1]]
+rows <- PNNL_proteome[,1]
 
 PNNL_proteome <- PNNL_proteome[,-1]
 
-rownames(PNNL_proteome) <- rows
+PNNL_proteome <- as.data.frame(PNNL_proteome)
 
-rows_JHU <- JHU_proteome[[1]]
+rownames(PNNL_proteome) <- unlist(rows)
+
+rows_JHU <- JHU_proteome[,1]
 
 JHU_proteome <- JHU_proteome[,-1]
 
-rownames(JHU_proteome) <- rows_JHU
+JHU_proteome <- as.data.frame(JHU_proteome)
+
+rownames(JHU_proteome) <- unlist(rows_JHU)
+
+```
+
+```{r}
 
 # Remove rows with more than 1/3 NAs and also replace all remaining NAs with row mean
 
-JHU_proteome_no_NAs <- remove_NA_rows(JHU_proteome[, -((ncol(JHU_proteome_processed)-5):ncol(JHU_proteome_processed))],0.3)
+JHU_proteome_no_NAs <- remove_NA_rows(JHU_proteome[,-((ncol(JHU_proteome)-5):ncol(JHU_proteome))],0.3)
 
-JHU_proteome_no_NAs <- replace_NAs_with_mean(JHU_proteome_no_NAs)
+JHU_proteome_no_NAs <- replace_all_NAs_with_row_means(JHU_proteome_no_NAs)
 
-PNNL_proteome_no_NAs <- remove_NA_rows(PNNL_proteome[, -((ncol(PNNL_proteome_processed)-5):ncol(PNNL_proteome_processed))],0.3)
+PNNL_proteome_no_NAs <- remove_NA_rows(PNNL_proteome[, -((ncol(PNNL_proteome)-5):ncol(PNNL_proteome))],0.3)
 
-PNNL_proteome_no_NAs <- replace_NAs_with_mean(PNNL_proteome_no_NAs)
+PNNL_proteome_no_NAs <- replace_all_NAs_with_row_means(PNNL_proteome_no_NAs)
 
 # merge PNNL and JHU data, keeping only proteins that appear in both datasets.
 
-proteome_matrix <- merge(JHU_proteome_no_NAs,PNNL_proteome_no_NAs,by='row.names')
+proteome_matrix <- merge(JHU_proteome_no_NAs,PNNL_proteome_no_NAs, by='row.names')
 
 
 ```
@@ -238,7 +265,7 @@ Now plot the PCA to check for batch effects
 
 ```{r}
 
-PCA_batch_effect(proteome_matrix,proteome_batches,"Proteome")+xlim(-25,25)
+plot_PCA(proteome_matrix,'Proteome',proteome_batches,"batches")
 
 
 ```
@@ -310,15 +337,15 @@ Now prep data for MOFA (find common patients between all the omics, make sure th
 ```{r}
 
 proteome_matrix1 <- proteome_matrix[, !grepl(".y", colnames(proteome_matrix))]
+processed_proteome_batches <- proteome_batches[!grepl(".y", colnames(proteome_matrix))]
+processed_proteome_batches2 <- processed_proteome_batches[!grepl("OVARIAN", colnames(proteome_matrix1))]
 proteome_matrix1 <- proteome_matrix1[, !grepl("OVARIAN", colnames(proteome_matrix1))]
 
 transcriptome_matrix1 <- remove_all_zero_variance_rows(transcriptome_matrix)
 
 # process all colnames into just patient codes
 
-transcriptome_patients <- substr(colnames(transcriptome_matrix1),9,12)
-
-colnames(transcriptome_matrix1) <- transcriptome_patients
+transcriptome_patients <- colnames(transcriptome_matrix1)
 
 methylation_patients <- substr(colnames(methylation_matrix),9,12)
 
@@ -338,7 +365,7 @@ methylation_matrix2 <- methylation_matrix1[,common_patients]
 
 proteome_matrix2 <- proteome_matrix1[,common_patients]
 
-omics_matrices <- list(methylation_matrix2,transcriptome_matrix2,proteome_matrix2)
+omics_matrices <- list(as.matrix(methylation_matrix2),as.matrix(transcriptome_matrix2),as.matrix(proteome_matrix2))
 
 ```
 
@@ -398,7 +425,7 @@ plot_factor(mofa_OV_params_trained, factor= 1:15)
 ```
 
 ```{r,fig.width= 9, fig.height= 7}
-plot_data_heatmap(mofa_OV_params_trained, view = 'view_1', factor = 2)
+plot_data_heatmap(mofa_OV_params_trained, view = 'view_3', factor = 2)
 
 ```
 
@@ -406,22 +433,13 @@ Trying to run SNF
 
 ```{r}
 
-# save the omics data for other uses
-
-saveRDS(omics_matrices, "TCGA-OV_matrices.rds")
-
-
-
-install.packages('SNFtool')
-library(SNFtool)
-
 k <- 12
 alpha <- 0.5
 t <- 12
 
 # First do it without standard normalization
 
-Dist_methylation <- dist2(t(methylation_matrix2),t(methylation_matrix2))
+Dist_methylation <- dist2(t((methylation_matrix2)),t((methylation_matrix2)))
 Methylation_similarity_graph <- affinityMatrix(Dist_methylation,k, alpha)
 
 Dist_transcriptome <- dist2(t(transcriptome_matrix2),t(transcriptome_matrix2))
@@ -538,11 +556,18 @@ ggplot(methylation_RLE_long, aes(x = variable, y = value, fill = Batch)) +
 
 # using original matrix since i suspect it is already a log ratio
 
+common_patients_transcriptome <- match(colnames(transcriptome_matrix2),batches_transcriptome$aliquot_barcode)
+
+processed_transcriptome_batch_ids <- batches_transcriptome[common_patients_transcriptome,]
+
+processed_proteome_batches2 <- processed_proteome_batches2[which(substr(colnames(proteome_matrix1),4,7) %in% common_patients)]
+
+
 proteome_RLE <- proteome_matrix2
 
 proteome_RLE_long <- reshape2::melt(proteome_RLE)
 
-proteome_RLE_long$Batch <- factor(rep(processed_proteome_batches2$Batch, each= nrow(proteome_RLE)))
+proteome_RLE_long$Batch <- factor(rep(processed_proteome_batches2, each= nrow(proteome_RLE)))
 
 proteome_RLE_long <- proteome_RLE_long %>%
   arrange(Batch, variable) %>%
@@ -580,7 +605,11 @@ Now we need to add some other metadata not included by default by TCGA (eg lib s
 
 ```{r}
 
-# add purity data
+# add purity data (using ESTIMATE, Aran et al 2015 'Systematic pan-cancer analysis of tumour purity')
+
+library(readxl)
+
+tumour_purity <- read_excel("Data/Metadata/41467_2015_BFncomms9971_MOESM1236_ESM.xlsx")
 
 tumour_purity$Patient <- substr(tumour_purity$`Sample ID`,9,12)
 
