@@ -1,12 +1,15 @@
 
 
 remove_NA_rows <- function(data, fraction_NAs){
+
   na_fraction <- apply(data, 1, function(x) {sum(is.na(x))/length(x)})
   
-  rows_to_remove <- which(na_fraction > fraction_NAs)
+  row.names <- rownames(data)
   
-  new_matrix <- data[-rows_to_remove, ]
+  new_matrix <- data[which(na_fraction <= fraction_NAs), ,drop=FALSE]
   
+  rownames(new_matrix) <- unlist(row.names[which(na_fraction <= fraction_NAs)])
+
   return(new_matrix)
   
 }
