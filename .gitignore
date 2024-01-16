@@ -1,1 +1,6 @@
-GDCdata
+GDCdata/
+Proteome data/
+.Rproj.user
+.Rhistory
+.DS_Store
+.Rdata
