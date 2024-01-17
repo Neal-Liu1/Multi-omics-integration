@@ -31,6 +31,9 @@ library(ggExtra)
 library(cowplot)
 library(SummarizedExperiment)
 library(SNFtool)
+library(biomaRt)
+library(umap)
+library(Rtsne)
 install_github('mtrussart/RUVIIIPRPS')
 install_github("jbkunst/kunstomverse")
 
@@ -337,8 +340,6 @@ Now prep data for MOFA (find common patients between all the omics, make sure th
 ```{r}
 
 proteome_matrix1 <- proteome_matrix[, !grepl(".y", colnames(proteome_matrix))]
-processed_proteome_batches <- proteome_batches[!grepl(".y", colnames(proteome_matrix))]
-processed_proteome_batches2 <- processed_proteome_batches[!grepl("OVARIAN", colnames(proteome_matrix1))]
 proteome_matrix1 <- proteome_matrix1[, !grepl("OVARIAN", colnames(proteome_matrix1))]
 
 transcriptome_matrix1 <- remove_all_zero_variance_rows(transcriptome_matrix)
@@ -560,14 +561,32 @@ common_patients_transcriptome <- match(colnames(transcriptome_matrix2),batches_t
 
 processed_transcriptome_batch_ids <- batches_transcriptome[common_patients_transcriptome,]
 
-processed_proteome_batches2 <- processed_proteome_batches2[which(substr(colnames(proteome_matrix1),4,7) %in% common_patients)]
 
+
+
+# trying to get proteome batch info
+processed_proteome_batches <- data.frame(matrix(nrow = ncol(proteome_matrix),ncol=1))
+processed_proteome_batches$patients <- colnames(proteome_matrix)
+processed_proteome_batches$Batch <- proteome_batches
+
+processed_proteome_batches1 <- processed_proteome_batches[!grepl('io.y',processed_proteome_batches$patients),]
+processed_proteome_batches1 <- processed_proteome_batches1[!grepl('CONT',processed_proteome_batches$patients),]
+
+processed_proteome_batches1<- processed_proteome_batches1[1:174,-1]
+
+processed_proteome_batches1$patients <- substr(processed_proteome_batches1$patients,4,7)
+
+length(intersect(processed_proteome_batches1$patients,colnames(proteome_matrix2)))
+
+orders_proteome <- match(colnames(proteome_matrix2),processed_proteome_batches1$patients)
+
+processed_proteome_batches2 <- processed_proteome_batches1[orders_proteome,]
 
 proteome_RLE <- proteome_matrix2
 
 proteome_RLE_long <- reshape2::melt(proteome_RLE)
 
-proteome_RLE_long$Batch <- factor(rep(processed_proteome_batches2, each= nrow(proteome_RLE)))
+proteome_RLE_long$Batch <- factor(rep(processed_proteome_batches2$Batch, each= nrow(proteome_RLE)))
 
 proteome_RLE_long <- proteome_RLE_long %>%
   arrange(Batch, variable) %>%
@@ -733,28 +752,6 @@ plot_vector_correlation(list(pca_methylation,prcomp(t(methylation_matrix2), scal
 
 ```{r}
 
-# trying to get proteome batch info
-processed_proteome_batches <- data.frame(matrix(nrow = ncol(proteome_matrix),ncol=1))
-processed_proteome_batches$patients <- colnames(proteome_matrix)
-processed_proteome_batches$Batch <- proteome_batches
-
-processed_proteome_batches1 <- processed_proteome_batches[!grepl('io.y',processed_proteome_batches$patients),]
-processed_proteome_batches1 <- processed_proteome_batches1[!grepl('CONT',processed_proteome_batches$patients),]
-
-processed_proteome_batches1<- processed_proteome_batches1[1:174,-1]
-
-processed_proteome_batches1$patients <- substr(processed_proteome_batches1$patients,4,7)
-
-length(intersect(processed_proteome_batches1$patients,colnames(proteome_matrix2)))
-
-orders_proteome <- match(colnames(proteome_matrix2),processed_proteome_batches1$patients)
-
-processed_proteome_batches2 <- processed_proteome_batches1[orders_proteome,]
-
-```
-
-```{r}
-
 plot_vector_correlation(list(pca_proteome),c('Proteome log ratios'),processed_proteome_batches2$Batch,'batches',10)
 
 ```
@@ -786,36 +783,23 @@ methylation_M_values <- log2(methylation_matrix2/(1-methylation_matrix2))
 
 methylation_RLE <- compute_log_transformed_RLE(methylation_matrix2)
 
-methylation_RLE_long <- reshape2::melt(methylation_matrix2)
-
-methylation_RLE_long$Batch <- factor(rep(processed_methylation_batch_ids$batch_id, each= nrow(methylation_RLE)))
-
-methylation_RLE_long <- methylation_RLE_long %>%
-  arrange(Batch, variable) %>%
-  mutate(variable = factor(variable, levels = unique(variable)))
-
 ```
 
 ```{r, fig.height=6,fig.width=10}
 
-ggplot(methylation_RLE_long, aes(x = variable, y = value, fill = Batch),color= Batch) +
-  geom_boxplot(outlier.shape = NA) +  # Set coef to Inf to extend whiskers to max/min + 
-  theme(axis.text.x = element_blank())+
-  labs(x = "Sample", y = "RLE Score", fill = "Batch", color = 'Batch')+
-  coord_cartesian()
-
+plot_RLE(methylation_RLE, processed_methylation_batch_ids$batch_id, ylimit=c(-0.2,0.2))
 
 ```
 
 ```{r}
 
-PCA_batch_effect(methylation_M_values,processed_methylation_batch_ids$batch_id,'methylation M values')
+plot_PCA(methylation_M_values,'Methylation M values',processed_methylation_batch_ids$batch_id,'batch')
 
 ```
 
 ```{r}
 
-PCA_batch_effect(methylation_matrix2,processed_methylation_batch_ids$batch_id,'methylation beta values')
+plot_PCA(methylation_matrix2,'methylation beta values',processed_methylation_batch_ids$batch_id,'batch')
 
 ```
 
@@ -884,7 +868,7 @@ Get the different purity estimates and add them into our patient metadata
 
 ```{r}
 
-`OV (Ovarian serous cystadenocarcinoma)` <- readRDS(file = 'Downloads/OV (Ovarian serous cystadenocarcinoma).rds')
+`OV (Ovarian serous cystadenocarcinoma)` <- readRDS(file = 'Data/OV (Ovarian serous cystadenocarcinoma).rds')
 
 zenodo_metadata <- colData(`OV (Ovarian serous cystadenocarcinoma)`)
 
@@ -1019,9 +1003,9 @@ Batch F test
 
 ```{r}
 
-transcript_batch_ftest <- ftest(transcriptome_matrix2,processed_transcriptome_batch_ids$batch_id,is.log=T,n.cores = 8)
-methylation_batch_ftest <- ftest(methylation_M_values,processed_methylation_batch_ids$batch_id,is.log=T,n.cores=8)
-methylation_beta_values_batch_ftest <- ftest(methylation_matrix2,processed_methylation_batch_ids$batch_id,is.log=T,n.cores=8)
+transcript_batch_ftest <- ftest(as.matrix(transcriptome_matrix2),processed_transcriptome_batch_ids$batch_id,is.log=T,n.cores = 8)
+methylation_batch_ftest <- ftest(as.matrix(methylation_M_values),processed_methylation_batch_ids$batch_id,is.log=T,n.cores=8)
+methylation_beta_values_batch_ftest <- ftest(as.matrix(methylation_matrix2),processed_methylation_batch_ids$batch_id,is.log=T,n.cores=8)
 
 ```
 
@@ -1048,7 +1032,7 @@ plot_PCA(methylation_matrix2[which(methylation_beta_values_batch_ftest$Adj.PValu
 
 ```{r}
 
-methylation_vital_status_ftest <- ftest(methylation_M_values,patient_metadata$vital_status,is.log=T,n.cores=8)
+methylation_vital_status_ftest <- ftest(as.matrix(methylation_M_values),patient_metadata$vital_status,is.log=T,n.cores=8)
 
 ```
 
@@ -1122,6 +1106,8 @@ plot_vector_correlation(list(pca_methylation,pca_transcriptome,pca_proteome),c('
 
 ```{r}
 
+transcriptome_matrix2 <- as.matrix(transcriptome_matrix2)
+
 transcript_subtype_ftest <- ftest(transcriptome_matrix2,patient_metadata$consensus_subtypes,is.log=T,n.cores=8)
 
 plot_PCA(transcriptome_matrix2[which(transcript_subtype_ftest$FValue>10),],'transcripts with > 5 F score',patient_metadata$consensus_subtypes,'subtypes')
@@ -1163,26 +1149,9 @@ OV_se <- SummarizedExperiment(assays = as.matrix(transcriptome_matrix2), colData
 
 assayNames(OV_se)[1]<- 'transcriptome_matrix2'
 
-OV_se@colData$transcriptome_batch <- factor(OV_se@colData$transcriptome_batch)
-
-transcriptome_matrix_Normalized <- RUVIIIPRPS::normalise(se.obj = OV_se,
-                                                         assay.name='transcriptome_matrix2',
-                                                         apply.log = F, 
-                                                         k=12, 
-                                                         bio.variable.prps = 'consensus_subtypes', 
-                                                         uv.variables.prps = c('lib_size','transcriptome_batch','purity_HTseq_FPKM.UQ'),
-                                                         batch.variable.prps = 'transcriptome_batch',
-                                                         min.sample.per.batch.prps = 3,
-                                                         norm.assay.name.ncg = 'transcriptome_matrix2',
-                                                         bio.variables.ncg = 'consensus_subtypes',
-                                                         uv.variables.ncg = c('lib_size','transcriptome_batch','purity_HTseq_FPKM.UQ')
-                                                         )
-                                                         
-                              
-
 ```
 
-Trying to see if it works if i manually delete the batches with less than 3 samples
+Trying to see if it works if i manually delete the batches with less than 3 samples because RUV has a bug that throws error if theres any batches with less than 3 samples.
 
 ```{r}
 
@@ -1336,7 +1305,9 @@ library(dynamicTreeCut)
 # Use dynamic cut
 dynamic_clusters <- cutreeDynamic(dendro=hc,minClusterSize=8)
 
-patient_metadata$pseudo_batch_RLE_median_cluster <- factor(dynamic_clusters)
+patient_metadata$pseudo_batch_RLE_median_cluster <- factor(as.character(dynamic_clusters))
+
+OV_se@colData$pseudo_batch_RLE_median_cluster <- factor(as.character(dynamic_clusters))
 
 
 ```
@@ -1393,6 +1364,15 @@ plot_vector_correlation(list(prcomp(t(assay(transcriptome_matrix_Normalized_by_R
 
 ```{r}
 
+genes <- substr(rownames(transcriptome_matrix2),1,15)
+
+gene_orders <- match(genes, entrez_ids$ensembl_gene_id)
+
+entrez_ids1 <- entrez_ids[gene_orders,]
+
+rownames(entrez_ids1) <- rownames(transcriptome_matrix2)
+
+
 OV_subtypes <- consensusOV::get.subtypes(as.matrix(assay(transcriptome_matrix_Normalized_by_RLE_cluster,'RUV_K4_on_transcriptome_matrix2')),entrez.ids = entrez_ids1$entrezgene_id)
 
 OV_subtypes1 <- OV_subtypes[[2]]
@@ -1447,19 +1427,6 @@ data_transcriptome@colData$subtype <- OV_subtypes1
 
 data_transcriptome@colData$survival_status <- !is.na(data_transcriptome@colData$days_to_death)
 
-surv_object <- Surv(time = data_transcriptome1@colData$days_to_death, event = data_transcriptome1@colData$survival_status)
-
-# Fit the survival curve - stratify by consensus_subtypes if needed
-fit <- survfit(surv_object ~ subtype, data = data_transcriptome1@colData)
-
-# Plot the survival curve
-ggsurvplot(fit, data = data_transcriptome1@colData, pval = TRUE,legend.title = "Subtypes",
-  legend.labs = c('Differentiated','Immunoreactive','Mesenchymal','Proliferative'))
-
-```
-
-```{r}
-
 data_transcriptome@colData$batch <- as.vector(ordered_batches_transcriptome$batch_id)
 
 data_transcriptome@colData$lib_size <- as.vector(as.numeric(apply(assay(data_transcriptome,'unstranded'), 2, sum)))
@@ -1498,6 +1465,21 @@ data_transcriptome1 <- data_transcriptome1[,!data_transcriptome1@colData$batch %
 
 
 ```
+
+
+```{r}
+surv_object <- Surv(time = data_transcriptome1@colData$days_to_death, event = data_transcriptome1@colData$survival_status)
+
+# Fit the survival curve - stratify by consensus_subtypes if needed
+fit <- survfit(surv_object ~ subtype, data = data_transcriptome1@colData)
+
+# Plot the survival curve
+ggsurvplot(fit, data = data_transcriptome1@colData, pval = TRUE,legend.title = "Subtypes",
+  legend.labs = c('Differentiated','Immunoreactive','Mesenchymal','Proliferative'))
+
+
+```
+
 
 ```{r}
 transcriptome_matrix_Normalized <- RUVIIIPRPS::normalise(se.obj = data_transcriptome1,
@@ -1675,6 +1657,9 @@ ggplot(subtype_purity_distributions, aes(x=tumor_purity, fill=tumor_subtype)) +
 Getting the LCM data
 
 ```{r}
+LCM_counts <- read_delim("Data/LCM/GSE132107_counts.txt", 
+    delim = "\t", escape_double = FALSE, 
+    trim_ws = TRUE)
 
 LCM_counts1 <- as.data.frame(LCM_counts)
 rownames(LCM_counts1) <- LCM_counts1[,1]
@@ -1919,7 +1904,7 @@ transcriptome_fpkm_uq1 <- transcriptome_fpkm_uq[edgeR::filterByExpr(assay(data_t
 
 transcriptome_fpkm_uq1 <- transcriptome_fpkm_uq1[,!data_transcriptome@colData$batch %in% batches_to_remove]
 
-transcript_fpkm_uq_vital_stats_wilcox_test <- wilcoxon.test(matrix=transcriptome_fpkm_uq1, variable=data_transcriptome1@colData$vital_status, is.log=F)
+transcript_fpkm_uq_vital_stats_wilcox_test <- wilcoxon_test(matrix=transcriptome_fpkm_uq1, variable=data_transcriptome1@colData$vital_status, is.log=F)
 
 ```
 

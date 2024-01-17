@@ -1,13 +1,11 @@
 
 
-remove_NA_rows <- function(data, fraction_NAs){
-
+remove_NA_rows <- function(data, fraction_NAs = 0.5){
+  # remove all rows in a matrix with fraction of NAs greater than fraction_NAs (default is 0.5)
+  
   na_fraction <- apply(data, 1, function(x) {sum(is.na(x))/length(x)})
-  
   row.names <- rownames(data)
-  
   new_matrix <- data[which(na_fraction <= fraction_NAs), ,drop=FALSE]
-  
   rownames(new_matrix) <- unlist(row.names[which(na_fraction <= fraction_NAs)])
 
   return(new_matrix)
@@ -23,6 +21,7 @@ replace_na_with_row_mean <- function(row) {
   row[is.na(row)] <- mean(row, na.rm = TRUE)
   return(row)
 }
+
 
 replace_all_NAs_with_row_means <- function(matrix){
   # replaces all NAs in a matrix with the row means
@@ -173,7 +172,7 @@ compute_log_transformed_RLE <- function(matrix){
 
 
 
-plot_RLE <- function(RLE_matrix, batch_info, ylimit){
+plot_RLE <- function(RLE_matrix, batch_info, ylimit=c(-10,10)){
   # taking a matrix of RLE scores, and a vector of batch information (in the same order as your samples), and y axis limits as a vector of 2 numbers, output an RLE graph ordered by batch
   
   RLE_long <- reshape2::melt(RLE_matrix)
