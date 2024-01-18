@@ -34,6 +34,7 @@ library(SNFtool)
 library(biomaRt)
 library(umap)
 library(Rtsne)
+library(singscore)
 install_github('mtrussart/RUVIIIPRPS')
 install_github("jbkunst/kunstomverse")
 
@@ -1669,7 +1670,7 @@ LCM_counts2 <- LCM_counts1[,-1]
 ```{r}
 LCM_counts2 <- remove_all_zero_variance_rows(LCM_counts2)
 
-a <- filterByExpr(y=LCM_counts2, min.count = 5, min.total.count = 25)
+a <- filterByExpr(y=LCM_counts2, min.count = 5, min.total.count = 10)
 
 LCM_counts2 <- log(LCM_counts2[a,]+1)
 
@@ -1779,15 +1780,6 @@ OV_subtypes2 <- OV_subtypes1[-which(is.na(rownames(purity_data))),]
 
 ```
 
-
-```{r}
-
-ggplot(OV_subtypes1, aes(x = Purity, y = `1st&2nd_subtype_difference`)) +
-   geom_point() +
-   labs(x = 'Purity', y = 'difference between 1st & 2nd most likely subtypes') +
-   ggtitle('Purity vs certainty of subtype classifier')
-
-```
 
 Looks like the midde line at 0.5 is all the missing values we replaced with the average. There's quite a lot of them so let's see what happens if we remove them.
 
@@ -2090,12 +2082,148 @@ plot_vector_correlation(list(prcomp(t(log(transcriptome_fpkm_uq1+1)[names(which(
 
 ```
 
-Convert LCM data into tpm and then try to do purity estimation to see how pure the LCM data is
+Now, since we have a significant number of missing tumour purity values, and we also need to estimate purity for LCM data anyway,
+we're gonna take matters into our own hands and figure out how to calculate purity ourselves.
+
+```{r}
+
+Yoshihara_stromal_immune_signatures <- read_excel("Data/Yoshihara et al stromal immune signatures.xlsx")
+
+stromal_immune_signatures <- as.data.frame(t(Yoshihara_stromal_immune_signatures[,-(1:2)]))
+rownames(stromal_immune_signatures) <- stromal_immune_signatures$V1
+stromal_immune_signatures <- stromal_immune_signatures[,-1]
+colnames(stromal_immune_signatures) <- c('Stromal','Immune')
+
+stromal_immune_signatures[stromal_immune_signatures =='TXNDC3'] <- 'NME8'
+stromal_immune_signatures[stromal_immune_signatures =='ODZ4'] <- 'TENM4'
+
+ensembl <- useMart("ensembl", dataset = "hsapiens_gene_ensembl")
+
+stromal_immune_genes <- getBM(attributes = c('hgnc_symbol', 'ensembl_gene_id'),
+                      filters = 'hgnc_symbol',
+                      values = cbind(stromal_immune_signatures$Stromal, stromal_immune_signatures$Immune),
+                      mart = ensembl)
+
+transcriptome_fpkm_uq2 <- substring_colnames(transcriptome_fpkm_uq1,9,12)
+rownames(transcriptome_fpkm_uq2) <- substr(rownames(transcriptome_fpkm_uq2),1,15)
+
+# 6 patients are duplicated so we're removing them here.
+transcriptome_fpkm_uq2 <- transcriptome_fpkm_uq2[,!duplicated(colnames(transcriptome_fpkm_uq2))]
+
+rank_data_temp <- singscore::rankGenes(transcriptome_fpkm_uq2)
+
+purity_test <- singscore::simpleScore(rank_data_temp, 
+                                      upSet = as.vector(stromal_immune_genes$ensembl_gene_id),
+                                      centerScore = F,
+                                      knownDirection = T)
+
+calculated_singscore_purity <- data.frame(`edgeR_filterbyExpr(10,25)` = (1-purity_test$TotalScore[match(data_transcriptome1@colData@rownames, rownames(purity_test))]),
+                                          original_purity_HTseq_FPKM_UQ = data_transcriptome1@colData$purity_HTseq_FPKM_UQ)
+```
+
+```{r}
+
+# trying all 60k genes instead of the 20k filtered genes because the scores are consistently slightly lower vs the ones on zenodo.
+
+# transcriptome_fpkm_uq3 <- transcriptome_fpkm_uq[filterByExpr(assay(data_transcriptome,'unstranded'), min.count = 30, min.total.count = 100),]
+
+
+keep.genes.cancer <- apply(assay(data_transcriptome,'unstranded'), 1, function(x) length(x[x > 15]) >= ncol(transcriptome_fpkm_uq)*.1)
+
+transcriptome_fpkm_uq3 <- transcriptome_fpkm_uq[keep.genes.cancer,]
+transcriptome_fpkm_uq3 <- substring_colnames(transcriptome_fpkm_uq3,9,12)
+rownames(transcriptome_fpkm_uq3) <- substr(rownames(transcriptome_fpkm_uq3),1,15)
+transcriptome_fpkm_uq3 <- transcriptome_fpkm_uq3[,!duplicated(colnames(transcriptome_fpkm_uq3))]
+
+purity_test1 <- singscore::simpleScore(rankGenes(transcriptome_fpkm_uq3), 
+                                      upSet = as.vector(stromal_immune_genes$ensembl_gene_id),
+                                      centerScore = F,
+                                      knownDirection = T)
+
+calculated_singscore_purity$`number of count > 15 greater than 10% ncol` <- (1-purity_test1$TotalScore[match(data_transcriptome1@colData@rownames, rownames(purity_test1))])
+
+```
+
+
+```{r}
+
+a<- reshape2::melt(calculated_singscore_purity)
+
+
+# Plotting density for each variable
+ggplot(a, aes(x = value, fill = variable, color=variable)) +
+  geom_density(alpha = 0.65) +
+  theme_minimal() + 
+  labs(x='Purity', title = 'Distribution of purity estimates with different gene filtering methods')+
+  theme(axis.line = element_line(colour = "grey75",linewidth = 0.8, lineend='round'),
+        panel.grid.major = element_line(color = "grey96")
+        )
+
+```
+
+
+```{r, fig.height=4,fig.width=9}
+
+# Plot the density plots
+ggplot(mapping = aes(x=calculated_singscore_purity$`number of count > 15 greater than 10% ncol`, fill=data_transcriptome1@colData$subtype)) +
+  geom_density(alpha=0.5) + # alpha for transparency to see overlap
+  labs(x="Tumor Purity", y="Density", fill="Tumor Subtype") +
+  ggtitle('Distribution of our calculated fpkm_uq purity estimate for each subtype') +
+  theme_minimal() +
+  scale_fill_brewer(palette="Set1")+
+  xlim(0.25, 0.75)+
+  theme(panel.border=element_rect(colour = "grey80", fill=NA, size=0.8))
+
+```
+
+```{r}
+ggplot(mapping = aes(x=log(transcriptome_fpkm_uq1+1)['ENSG00000043462.13',], y= calculated_singscore_purity$edgeR_filterbyExpr.10.25., color= data_transcriptome1@colData$subtype)) +
+  geom_point(alpha=0.7) + # alpha for transparency to see overlap
+  labs(x="Expression levels of ENSG00000043462 (log fpkm uq)", y="Calculated singscore purity", color="Subtypes") +
+  ggtitle('Expression levels of Lymphocyte cytosolic protein 2 vs purity') +
+  theme_minimal() +
+  scale_fill_brewer(palette="Set1")+
+  theme(panel.border=element_rect(colour = "grey80", fill=NA, size=0.8),
+        aspect.ratio = 1/1.05,
+        axis.line = element_line(colour = "grey75", linewidth = 1.1),
+        panel.grid.major = element_line(color = "grey96"),)
+```
+
+```{r}
+
+ggplot(mapping = aes(x=log(transcriptome_fpkm_uq1+1)['ENSG00000167771.6',], y= calculated_singscore_purity$edgeR_filterbyExpr.10.25., color= data_transcriptome1@colData$subtype)) +
+  geom_point(alpha=0.72) + # alpha for transparency to see overlap
+  labs(x="Expression levels of ENSG00000167771.6 (log fpkm uq)", y="HTseq purity", color="Subtypes") +
+  ggtitle('Expression levels of REST corepressor 2 (RCOR2) vs purity') +
+  theme_minimal() +
+  scale_fill_brewer(palette="Set1")+
+  theme(panel.border=element_rect(colour = "grey80", fill=NA, size=0.8),
+        aspect.ratio = 1/1.05,
+        axis.line = element_line(colour = "grey75", linewidth = 1.1),
+        panel.grid.major = element_line(color = "grey96"),)
+
+```
+
+```{r}
+
+ggplot(mapping = aes(x = calculated_singscore_purity$edgeR_filterbyExpr.10.25., y = OV_subtypes1$`1st&2nd_subtype_difference`, color=OV_subtypes1$Subtype)) +
+   geom_point(alpha=0.7) +
+   labs(x = 'Calculated singscore Purity', y = 'difference between 1st & 2nd most likely subtypes') +
+   ggtitle('Calculated singscore Purity vs certainty of subtype classifier (TCGA log fpkm)')+
+   theme_minimal() +
+   theme(panel.border=element_rect(colour = "grey80", fill=NA, size=0.8),
+        aspect.ratio = 1/1.4,
+        axis.line = element_line(colour = "grey75", linewidth = 1.1),
+        panel.grid.major = element_line(color = "grey96"),)
+
+```
+
+Convert LCM data into fpkm_uq and then try to do purity estimation to see how pure the LCM data is
 
 ```{r}
 ensembl <- useMart("ensembl", dataset = "hsapiens_gene_ensembl")
 
-gene_lengths <- getBM(attributes = c('hgnc_symbol', 'gene_biotype', 'chromosome_name', 'start_position', 'end_position'),
+gene_lengths <- getBM(attributes = c('hgnc_symbol', 'gene_biotype', 'chromosome_name', 'start_position', 'end_position','ensembl_gene_id','entrezgene_id'),
                       filters = 'hgnc_symbol',
                       values = rownames(LCM_counts2),
                       mart = ensembl)
@@ -2103,13 +2231,51 @@ gene_lengths <- getBM(attributes = c('hgnc_symbol', 'gene_biotype', 'chromosome_
 gene_lengths$length <- gene_lengths$end_position - gene_lengths$start_position +1
 
 gene_lengths <- gene_lengths[which(gene_lengths$gene_biotype == 'protein_coding'),]
-gene_lengths <- gene_lengths[which(!grepl('_',gene_lengths$chromosome_name)),]
+# gene_lengths <- gene_lengths[which(!grepl('_',gene_lengths$chromosome_name)),]
+gene_lengths <- gene_lengths[!duplicated(gene_lengths$hgnc_symbol),]
 
 rownames(gene_lengths) <- gene_lengths[,1]
 
-LCM_counts3 <- lineup_samples(t(LCM_counts2),t(gene_lengths))
+LCM_counts3 <- lineup_samples(list(LCM_counts2, gene_lengths), direction = 'rows')[[1]]
+gene_lengths <- lineup_samples(list(LCM_counts2, gene_lengths), direction = 'rows')[[2]]
 
+
+```
+
+
+
+```{r}
 
 
 
 ```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
