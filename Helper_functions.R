@@ -15,17 +15,9 @@ remove_NA_rows <- function(data, fraction_NAs = 0.5){
 
 
 
-
-replace_na_with_row_mean <- function(row) {
-  # Replace NAs in a single row with the row's mean
-  row[is.na(row)] <- mean(row, na.rm = TRUE)
-  return(row)
-}
-
-
 replace_all_NAs_with_row_means <- function(matrix){
   # replaces all NAs in a matrix with the row means
-  output_matrix <- t(apply(matrix, 1, replace_na_with_row_mean))
+  output_matrix <- t(apply(matrix, 1, function(row){row[is.na(row)] <- mean(row, na.rm = TRUE) ; return(row)}))
   
   return(as.data.frame(output_matrix))
 }
@@ -107,29 +99,22 @@ remove_all_low_number_rows <- function(matrix, number){
 
 
 
-
-substring_colnames <- function(matrix, index1, index2){
-  names <- substr(colnames(matrix), index1, index2)
-  colnames(matrix) <- names
-  
-  return(matrix)
-  
-}
-
-
-
-
-
-
-lineup_samples <- function(matrix_list){
-  # taking a list of matrices, find common samples in all matrices, discard all 
+lineup_samples <- function(matrix_list, direction = 'columns'){
+  # taking a list of matrices and direction ('rows' or 'columns'), find common samples in all matrices, discard all 
   # others, and line up all the common samples in the same order in all matrices.
   # outputs a list of the processed matrices.
-  common_samples <- Reduce(intersect, lapply(matrix_list,colnames))
-
-  matrix_list_aligned <- lapply(matrix_list, function(matrix) {
-    matrix[, common_samples, drop = FALSE]
-  })
+  
+  if( direction == 'columns'){
+    common_samples <- Reduce(intersect, lapply(matrix_list,colnames))
+    matrix_list_aligned <- lapply(matrix_list, function(matrix) {matrix[, common_samples, drop = FALSE]})
+  }
+  
+  if( direction == 'rows'){
+    common_samples <- Reduce(intersect, lapply(matrix_list,rownames))
+    matrix_list_aligned <- lapply(matrix_list, function(matrix) {matrix[common_samples, , drop = FALSE]})
+  }
+    
+  else{stop("The direction you entered is invalid. You can only enter 'rows' or 'columns'.")}
   
   return(matrix_list_aligned)
 }
@@ -425,6 +410,15 @@ plot_tSNE <- function(matrix, metadata_vector, matrix_name, metadata_name){
 
 
 
+
+basic_count_normalization <- function(matrix, type='', log.transform = F){
+  # taking a matrix of raw counts, convert to FPKM, FPKM_UQ or TPM. 
+  # if log.transform is set to True the output matrix will also be log transformed for you (log base 2 + 1 pseudo count)
+  
+  
+  
+  
+}
 
 
 
