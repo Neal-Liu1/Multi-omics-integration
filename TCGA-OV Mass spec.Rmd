@@ -11,6 +11,8 @@ knitr::opts_chunk$set(echo = TRUE)
 Load libraries
 
 ```{r}
+
+library(rcompanion)
 library(GenomicRanges)
 library(sesameData)
 library(sesame)
@@ -35,6 +37,7 @@ library(biomaRt)
 library(umap)
 library(Rtsne)
 library(singscore)
+library(rcompanion)
 install_github('mtrussart/RUVIIIPRPS')
 install_github("jbkunst/kunstomverse")
 
@@ -1662,15 +1665,15 @@ LCM_counts <- read_delim("Data/LCM/GSE132107_counts.txt",
     delim = "\t", escape_double = FALSE, 
     trim_ws = TRUE)
 
-LCM_counts1 <- as.data.frame(LCM_counts)
-rownames(LCM_counts1) <- LCM_counts1[,1]
-LCM_counts2 <- LCM_counts1[,-1]
+LCM_counts1 <- as.data.frame(LCM_counts[,-1])
+rownames(LCM_counts1) <- LCM_counts$Genes
+LCM_counts2 <- LCM_counts1
 ```
 
 ```{r}
 LCM_counts2 <- remove_all_zero_variance_rows(LCM_counts2)
 
-a <- filterByExpr(y=LCM_counts2, min.count = 5, min.total.count = 10)
+a <- filterByExpr(y=LCM_counts1, min.count = 4, min.total.count = 10)
 
 LCM_counts2 <- log(LCM_counts2[a,]+1)
 
@@ -2099,7 +2102,7 @@ stromal_immune_signatures[stromal_immune_signatures =='ODZ4'] <- 'TENM4'
 
 ensembl <- useMart("ensembl", dataset = "hsapiens_gene_ensembl")
 
-stromal_immune_genes <- getBM(attributes = c('hgnc_symbol', 'ensembl_gene_id'),
+stromal_immune_genes <- getBM(attributes = c('hgnc_symbol', 'ensembl_gene_id','entrezgene_id'),
                       filters = 'hgnc_symbol',
                       values = cbind(stromal_immune_signatures$Stromal, stromal_immune_signatures$Immune),
                       mart = ensembl)
@@ -2113,7 +2116,7 @@ transcriptome_fpkm_uq2 <- transcriptome_fpkm_uq2[,!duplicated(colnames(transcrip
 rank_data_temp <- singscore::rankGenes(transcriptome_fpkm_uq2)
 
 purity_test <- singscore::simpleScore(rank_data_temp, 
-                                      upSet = as.vector(stromal_immune_genes$ensembl_gene_id),
+                                      upSet = as.vector(unique(stromal_immune_genes$ensembl_gene_id)),
                                       centerScore = F,
                                       knownDirection = T)
 
@@ -2122,8 +2125,6 @@ calculated_singscore_purity <- data.frame(`edgeR_filterbyExpr(10,25)` = (1-purit
 ```
 
 ```{r}
-
-# trying all 60k genes instead of the 20k filtered genes because the scores are consistently slightly lower vs the ones on zenodo.
 
 # transcriptome_fpkm_uq3 <- transcriptome_fpkm_uq[filterByExpr(assay(data_transcriptome,'unstranded'), min.count = 30, min.total.count = 100),]
 
@@ -2136,7 +2137,7 @@ rownames(transcriptome_fpkm_uq3) <- substr(rownames(transcriptome_fpkm_uq3),1,15
 transcriptome_fpkm_uq3 <- transcriptome_fpkm_uq3[,!duplicated(colnames(transcriptome_fpkm_uq3))]
 
 purity_test1 <- singscore::simpleScore(rankGenes(transcriptome_fpkm_uq3), 
-                                      upSet = as.vector(stromal_immune_genes$ensembl_gene_id),
+                                      upSet = as.vector(unique(stromal_immune_genes$ensembl_gene_id)),
                                       centerScore = F,
                                       knownDirection = T)
 
@@ -2225,7 +2226,7 @@ ensembl <- useMart("ensembl", dataset = "hsapiens_gene_ensembl")
 
 gene_lengths <- getBM(attributes = c('hgnc_symbol', 'gene_biotype', 'chromosome_name', 'start_position', 'end_position','ensembl_gene_id','entrezgene_id'),
                       filters = 'hgnc_symbol',
-                      values = rownames(LCM_counts2),
+                      values = rownames(LCM_counts1),
                       mart = ensembl)
 
 gene_lengths$length <- gene_lengths$end_position - gene_lengths$start_position +1
@@ -2236,27 +2237,48 @@ gene_lengths <- gene_lengths[!duplicated(gene_lengths$hgnc_symbol),]
 
 rownames(gene_lengths) <- gene_lengths[,1]
 
-LCM_counts3 <- lineup_samples(list(LCM_counts2, gene_lengths), direction = 'rows')[[1]]
-gene_lengths <- lineup_samples(list(LCM_counts2, gene_lengths), direction = 'rows')[[2]]
-
+LCM_counts3 <- lineup_samples(list(LCM_counts1, gene_lengths), direction = 'rows')[[1]]
+gene_lengths <- lineup_samples(list(LCM_counts1, gene_lengths), direction = 'rows')[[2]]
 
 ```
-
 
 
 ```{r}
 
+# convert the raw counts to fpkm_uq
+
+gene_lengths$gene_lengths_kb <- gene_lengths$length / 1000
+normalized_counts <- sweep(LCM_counts3, 1, gene_lengths$gene_lengths_kb, FUN = "/")
+
+upper_quartile <- as.vector(apply(normalized_counts, 1, function(x) quantile(x, probs=0.75, na.rm=TRUE)))
+
+LCM_fpkm_uq <- sweep(normalized_counts, 1, upper_quartile, FUN = "/") * 1e6
 
 
 ```
 
 
+```{r}
 
+rank_data_temp <- singscore::rankGenes(LCM_counts1[edgeR::filterByExpr(LCM_counts1,min.count = 4, min.total.count = 10),])
 
+purity_test1 <- singscore::simpleScore(rank_data_temp, 
+                                      upSet = as.vector(unique(stromal_immune_genes$hgnc_symbol)),
+                                      centerScore = F,
+                                      knownDirection = T)
 
+purity_test1$Purity <- (1-purity_test1$TotalScore)
 
+hist(purity_test1$Purity)
 
+```
 
+```{r}
+
+View(scheirerRayHare(y=transcriptome_matrix2[1,], x1=patient_metadata$consensus_subtypes, x2 = patient_metadata$transcriptome_batch, type= 1))
+View(kruskal.test(transcriptome_matrix2[1,], patient_metadata$transcriptome_batch))
+
+```
 
 
 
