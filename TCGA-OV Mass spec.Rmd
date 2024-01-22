@@ -2362,58 +2362,36 @@ plot_PCA(assay(data_transcriptome1,'transcriptome_matrix1')[rownames(transcript_
 
 ```
 
-```{r}
-
-ANOVA_2way <- function(matrix, variable_1, variable_2, is.log=T, n.cores=8, pval_adj_method = 'BH', sort_by = NULL) {
-  #
-  
-  if (!is.matrix(matrix)){stop(paste0("We detect your data is a '",class(matrix),"' not a matrix. Please double check"))}
-  if (!is.log) {matrix <- log(matrix + 1)}
-  
-  data <- as.data.frame(matrix)
-  
-  
-  # Applying the two_way_anova function across all genes
-  results <- parallel::mclapply(1:nrow(data), function(x) {fit <- aov(as.numeric(data[x,]) ~ variable_1*variable_2)
-    return(summary(fit)[[1]])}, mc.cores = n.cores)
-  
-  results <- data.frame(
-    F_score = round(unlist(lapply(results, function(x) {x[['F value']][1]})), digits = 4) ,
-    PValue = unlist(lapply(results, function(x) {x[['Pr(>F)']][2]})))
-  
-  return(results)
-  
-  # Adjusting p-values for multiple testing
-  adj.p_values <- p.adjust(p_values, method = 'BH')
-  
-  # Creating a dataframe to return results
-  results <- data.frame(Gene = rownames(expression_matrix), 
-                        PValue = unlist(p_values), 
-                        Adj.PValue = unlist(adj.p_values))
-  
-  if (!is.null(sort_by)) {
-    if (!sort_by %in% colnames(results)){stop("The column you want to sort by doesn't exist. You can choose from:'PValue','Adj.PValue','Mean'.")}
-    else {results <- results[order(results[[sort_by]]),]}
-    }
-  
-  return(results)
-}
-
-# View(summary(aov(assay(data_transcriptome1,'transcriptome_matrix1')[2,] ~ data_transcriptome1@colData$subtype * data_transcriptome1@colData$survival_status))[[1]])
-
-```
-
-
 
 ```{r}
+
+data_transcriptome1@colData$Binned_purity <- cut(data_transcriptome1@colData$Calculated_singscore_purity,
+         breaks=quantile(data_transcriptome1@colData$Calculated_singscore_purity, probs=0:4/4),
+         include.lowest=TRUE, labels=F)
  
-View(ANOVA_2way(assay(data_transcriptome1,'transcriptome_matrix1')[1:20,], data_transcriptome1@colData$subtype, data_transcriptome1@colData$survival_status))
+transcript_subtype_purity_anova <- ANOVA_2way(assay(data_transcriptome1,'transcriptome_matrix1'), data_transcriptome1@colData$subtype, data_transcriptome1@colData$Binned_purity)
 
+transcript_subtype_purity_anova <- transcript_subtype_purity_anova[order(transcript_subtype_purity_anova[['Adj.PValue']]),]
+
+ggplot(mapping=aes(x=transcript_subtype_purity_anova$Adj.PValue))+
+  geom_histogram(fill='grey70', color='grey60', alpha=0.5)+
+  theme_minimal() +
+  theme(axis.line = element_line(colour = "grey83", linewidth = 1.1),
+          panel.border = element_rect(colour = "grey90", fill=NA, size=0.7),
+          panel.grid.major = element_line(color = "grey96"),
+          aspect.ratio = 1/1.4) +
+    ggtitle('Distribution of Adj.Pvalues for subtype & purity two-way ANOVA')
+  
 
 ```
 
 
+```{r}
 
+plot_PCA(assay(data_transcriptome1,'transcriptome_matrix1')[which(transcript_subtype_purity_anova$Adj.PValue < 0.05),],'genes with high interaction between purity & subtype',data_transcriptome1@colData$subtype,'subtype')
+
+
+```
 
 
 
