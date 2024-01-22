@@ -300,6 +300,7 @@ get_high_correlation_features <- function(matrix, variable_vector, threshold, me
 
 
 
+
 ftest <- function(matrix, variable, is.log=T, n.cores=8){
   # taking a matrix of data and a vector of categorical variables, calculate F and P values for each feature.
   # Note that your data is first log transformed. If you set is.log =F, we'll transform it first and then do the ANOVA.
@@ -323,6 +324,41 @@ ftest <- function(matrix, variable, is.log=T, n.cores=8){
 
 
 
+
+ANOVA_2way <- function(matrix, variable_1, variable_2, is.log=T, n.cores=8, pval_adj_method = 'BH', sort_by = NULL) {
+  # Taking a matrix and two categorical variable vectors, conducts 2 way ANOVA for every row
+  # returns F score, P-value, adjusted P-value and mean of each row. 
+  
+  #Check data
+  if (!is.matrix(matrix)){stop(paste0("We detect your data is a '",class(matrix),"' not a matrix. Please double check"))}
+  if (!is.log) {matrix <- log(matrix + 1)}
+  
+  data <- as.data.frame(matrix)
+  
+  # Applying the two_way_anova function across all genes
+  results <- parallel::mclapply(1:nrow(data), function(x) {fit <- aov(as.numeric(data[x,]) ~ variable_1*variable_2)
+  return(summary(fit)[[1]])}, mc.cores = n.cores)
+  
+  # Format the results
+  results <- data.frame(
+    Interaction_F_score = round(unlist(lapply(results, function(x) {x[['F value']][3]})), digits = 4),
+    Interaction_PValue = unlist(lapply(results, function(x) {x[['Pr(>F)']][3]})),
+    Adj.PValue = p.adjust(unlist(lapply(results, function(x) {x[['Pr(>F)']][3]})), method = pval_adj_method),
+    Mean = rowMeans(matrix))
+  
+  if (!is.null(sort_by)) {
+    if (!sort_by %in% colnames(results)){stop("The column you want to sort by doesn't exist. You can choose from:'Interaction_F_score','Interaction_PValue','Adj.PValue', 'Mean'.")}
+    else {results <- results[order(results[[sort_by]]),]}
+  }
+  
+  return(results)
+}
+
+
+
+
+
+
 wilcoxon_test <- function(matrix, variable, is.log=T, n.cores = 8){
   # 
   # 
@@ -341,8 +377,12 @@ wilcoxon_test <- function(matrix, variable, is.log=T, n.cores = 8){
   
   
 
+
+
+
+
 kruskal_wallis_test <- function(matrix, variable, is.log=T, n.cores=8, pval_adj_method = 'BH', sort_by = NULL){
-  # taking a matrix of data and a vector of categorical variables, calculate Kruskal Wallis chisq value and P values for each feature.
+  # Taking a matrix of data and a vector of categorical variables, calculate Kruskal Wallis chisq value and P values for each feature.
   # Note that if you put is.log=False, we'll transform it first and then do the ANOVA.
   
   data <- matrix
@@ -372,6 +412,16 @@ kruskal_wallis_test <- function(matrix, variable, is.log=T, n.cores=8, pval_adj_
   return(k.test)
 }
 
+
+
+ScheirerRayHare_test <- function(matrix, variable_1, variable_2, is.log=T, n.cores=8, pval_adj_method = 'BH', sort_by = NULL){
+  # Non-parametric version of the two-way ANOVA. 
+  
+  
+  
+  
+  
+}
 
 
 
@@ -406,6 +456,12 @@ plot_tSNE <- function(matrix, metadata_vector, matrix_name, metadata_name){
     ggtitle(paste0('tSNE of ',matrix_name,' grouped by ',metadata_name))
   
 }
+
+
+
+
+
+
 
 
 
