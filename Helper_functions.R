@@ -57,7 +57,7 @@ plot_PCA <- function(matrix, dataset_name, labels, label_name, pcs= c(1,2)){
           legend.key = element_blank(),
           legend.position = "right",
           panel.background = element_blank(), 
-          axis.line = element_line(colour = "grey35",linewidth = 1.1, lineend='round'),
+          axis.line = element_line(colour = "grey43",linewidth = 1.1, lineend='round'),
           panel.grid.major = element_line(color = "grey96"))
   
   p <- p + theme(legend.position = "right")
@@ -341,13 +341,18 @@ ANOVA_2way <- function(matrix, variable_1, variable_2, is.log=T, n.cores=8, pval
   
   # Format the results
   results <- data.frame(
+    Var1_F_score = round(unlist(lapply(results, function(x) {x[['F value']][1]})), digits = 4),
+    Var1_Adj_PValue = p.adjust(unlist(lapply(results, function(x) {x[['Pr(>F)']][1]})), method = pval_adj_method),
+    Var2_F_score = round(unlist(lapply(results, function(x) {x[['F value']][2]})), digits = 4),
+    Var2_Adj_PValue = p.adjust(unlist(lapply(results, function(x) {x[['Pr(>F)']][2]})), method = pval_adj_method),
     Interaction_F_score = round(unlist(lapply(results, function(x) {x[['F value']][3]})), digits = 4),
-    Interaction_PValue = unlist(lapply(results, function(x) {x[['Pr(>F)']][3]})),
-    Adj.PValue = p.adjust(unlist(lapply(results, function(x) {x[['Pr(>F)']][3]})), method = pval_adj_method),
+    Interaction_Adj_PValue = p.adjust(unlist(lapply(results, function(x) {x[['Pr(>F)']][3]})), method = pval_adj_method),
     Mean = rowMeans(matrix))
   
   if (!is.null(sort_by)) {
-    if (!sort_by %in% colnames(results)){stop("The column you want to sort by doesn't exist. You can choose from:'Interaction_F_score','Interaction_PValue','Adj.PValue', 'Mean'.")}
+    if (!sort_by %in% colnames(results)){
+      stop("The column you want to sort by doesn't exist. You can choose from:'Var1_F_score', 'Var1_Adj_PValue', 
+      'Var2_F_score', 'Var2_Adj_PValue', 'Interaction_F_score','Interaction_Adj_PValue', 'Mean'.")}
     else {results <- results[order(results[[sort_by]]),]}
   }
   
