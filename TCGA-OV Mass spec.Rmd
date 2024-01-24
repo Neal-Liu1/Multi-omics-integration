@@ -2339,7 +2339,7 @@ ggplot(mapping = aes(x=data_transcriptome1@colData$purity_HTseq_FPKM_UQ,y=data_t
 
 ```{r}
 
-OV_subtypes1$Confident_subtypes <- ifelse(OV_subtypes1$`1st&2nd_subtype_difference` > 0.6, 'yes', 'no')
+OV_subtypes1$Confident_subtypes <- ifelse(OV_subtypes1$`1st&2nd_subtype_difference` > 0.5, 'yes', 'no')
 
 data_transcriptome1@colData$Confident_subtypes <- OV_subtypes1$Confident_subtypes
 
@@ -2371,9 +2371,7 @@ data_transcriptome1@colData$Binned_purity <- cut(data_transcriptome1@colData$Cal
  
 transcript_subtype_purity_anova <- ANOVA_2way(assay(data_transcriptome1,'transcriptome_matrix1'), data_transcriptome1@colData$subtype, data_transcriptome1@colData$Binned_purity)
 
-transcript_subtype_purity_anova <- transcript_subtype_purity_anova[order(transcript_subtype_purity_anova[['Adj.PValue']]),]
-
-ggplot(mapping=aes(x=transcript_subtype_purity_anova$Adj.PValue))+
+ggplot(mapping=aes(x=transcript_subtype_purity_anova$Interaction_Adj_PValue))+
   geom_histogram(fill='grey70', color='grey60', alpha=0.5)+
   theme_minimal() +
   theme(axis.line = element_line(colour = "grey83", linewidth = 1.1),
@@ -2388,10 +2386,85 @@ ggplot(mapping=aes(x=transcript_subtype_purity_anova$Adj.PValue))+
 
 ```{r}
 
-plot_PCA(assay(data_transcriptome1,'transcriptome_matrix1')[which(transcript_subtype_purity_anova$Adj.PValue < 0.05),],'genes with high interaction between purity & subtype',data_transcriptome1@colData$subtype,'subtype')
+plot_PCA(assay(data_transcriptome1,'transcriptome_matrix1')[which(transcript_subtype_purity_anova$Interaction_Adj_PValue > 0.99),],'genes with high interaction between purity & subtype',data_transcriptome1@colData$subtype,'subtype', pcs=c(1,2))
 
 
 ```
+
+```{r}
+
+ggplot(mapping=aes(x=transcript_subtype_purity_anova$Interaction_Adj_PValue[which(transcript_subtype_purity_anova$Var1_Adj_PValue < 0.01 & transcript_subtype_purity_anova$Var2_Adj_PValue > 0.9)]))+
+  geom_histogram(fill='grey70', color='grey60', alpha=0.5)+
+  theme_minimal() +
+  theme(axis.line = element_line(colour = "grey83", linewidth = 1.1),
+          panel.border = element_rect(colour = "grey90", fill=NA, size=0.7),
+          panel.grid.major = element_line(color = "grey96"),
+          aspect.ratio = 1/1.4) +
+    ggtitle('Distribution of Adj.Pvalues for subtype & purity two-way ANOVA')
+
+
+```
+
+
+```{r}
+plot_PCA(assay(data_transcriptome1,'transcriptome_matrix1')[which(transcript_subtype_purity_anova$Var1_Adj_PValue < 0.05 & transcript_subtype_purity_anova$Var2_Adj_PValue > 0.95 & transcript_subtype_purity_anova$Interaction_Adj_PValue > 0.95),],'genes that differ between subtype & purity',data_transcriptome1@colData$subtype,'subtype', pcs=c(1,2))
+
+```
+
+```{r}
+
+ggplot(mapping=aes(x=transcript_subtype_purity_anova$Interaction_Adj_PValue[which(transcript_subtype_purity_anova$Var1_Adj_PValue < 0.01 & transcript_subtype_purity_anova$Var2_Adj_PValue < 0.01)]))+
+  geom_histogram(fill='grey70', color='grey60', alpha=0.5)+
+  theme_minimal() +
+  theme(axis.line = element_line(colour = "grey80", linewidth = 1.1),
+          panel.border = element_rect(colour = "grey90", fill=NA, size=0.7),
+          panel.grid.major = element_line(color = "grey96"),
+          aspect.ratio = 1/1.4) +
+    ggtitle('Distribution of Adj.Pvalues for subtype & purity two-way ANOVA')
+
+
+```
+
+```{r}
+genes_w_subtype_purity_interaction_info <- getBM(attributes = c('ensembl_gene_id', 'external_gene_name', 'gene_biotype',
+                                                                'description'   # 'name_1006', 'go_linkage_type'
+                                                                ),
+                   filters = 'ensembl_gene_id', 
+                   values = substr(rownames(transcript_subtype_purity_anova[which(transcript_subtype_purity_anova$Interaction_Adj_PValue<0.05),]),1,15), 
+                   mart = ensembl)
+
+rownames(genes_w_subtype_purity_interaction_info) <- rownames(transcript_subtype_purity_anova[which(transcript_subtype_purity_anova$Interaction_Adj_PValue<0.05),])
+
+```
+
+
+```{r}
+
+ggplot(mapping = aes(x=log(transcriptome_fpkm_uq[,colnames(transcriptome_fpkm_uq) %in% colnames(transcriptome_fpkm_uq1)]+1)["ENSG00000128564.7",], 
+                     y= calculated_singscore_purity$edgeR_filterbyExpr.10.25., color= data_transcriptome1@colData$subtype)) +
+  geom_point(alpha=0.72) + # alpha for transparency to see overlap
+  labs(x="Expression levels of ENSG00000128564.7 (log fpkm uq)", 
+       y="HTseq purity", 
+       color="Subtypes") +
+  ggtitle('Expression levels of VGF nerve growth factor vs purity') +
+  theme_minimal() +
+  scale_fill_brewer(palette="Set1")+
+  theme(panel.border=element_rect(colour = "grey80", fill=NA, size=0.8),
+        aspect.ratio = 1/1.05,
+        axis.line = element_line(colour = "grey75", linewidth = 1.1),
+        panel.grid.major = element_line(color = "grey96"),)
+
+```
+
+```{r}
+
+
+
+```
+
+
+
+
 
 
 
