@@ -38,6 +38,12 @@ library(umap)
 library(Rtsne)
 library(singscore)
 library(rcompanion)
+library(pheatmap)
+library(clusterProfiler)
+library(enrichplot)
+library(org.Hs.eg.db)
+library(GO.db)
+
 install_github('mtrussart/RUVIIIPRPS')
 install_github("jbkunst/kunstomverse")
 
@@ -110,7 +116,7 @@ transcriptome_matrix <- log(transcriptome_matrix+1)
 
 transcriptome_matrix <- remove_all_low_number_rows(transcriptome_matrix,2.3)
 
-transcriptome_matrix <- substring_colnames(transcriptome_matrix,9,12)
+colnames(transcriptome_matrix) <- substr(colnames(transcriptome_matrix),9,12)
 
 ```
 
@@ -358,7 +364,7 @@ methylation_matrix1 <- methylation_matrix
 
 colnames(methylation_matrix1) <- methylation_patients
 
-proteome_matrix1 <- substring_colnames(proteome_matrix1,4,7)
+colnames(proteome_matrix1) <- substr(colnames(proteome_matrix1),4,7)
 
 # find common patients and order all matrices with the same patient order.
 
@@ -646,7 +652,7 @@ patient_metadata$Purity <- as.numeric(Purity$CPE)
 
 transcriptome_raw_counts <- assay(data_transcriptome, 'unstranded')
 
-transcriptome_raw_counts <- substring_colnames(transcriptome_raw_counts,9,12)
+colnames(transcriptome_raw_counts) <- substr(colnames(transcriptome_raw_counts), 9,12)
 
 orders <- match(colnames(transcriptome_matrix2),colnames(transcriptome_raw_counts))
 
@@ -811,7 +817,7 @@ Try to check libsize before and after
 
 ```{r}
 
-transcriptome_raw_counts <- substring_colnames(transcriptome_raw_counts,9,12)
+colnames(transcriptome_raw_counts) <- substr(colnames(transcriptome_raw_counts), 9,12)
 
 orders <- match(colnames(transcriptome_matrix2),colnames(transcriptome_raw_counts))
 
@@ -1042,7 +1048,7 @@ methylation_vital_status_ftest <- ftest(as.matrix(methylation_M_values),patient_
 
 ```{r}
 
-ensembl <- useMart("ensembl", dataset = "hsapiens_gene_ensembl")
+ensembl <- useMart("ensembl", host="https://asia.ensembl.org", dataset = "hsapiens_gene_ensembl")
 
 genes <- substr(rownames(transcriptome_matrix2),1,15)
 
@@ -2100,14 +2106,17 @@ colnames(stromal_immune_signatures) <- c('Stromal','Immune')
 stromal_immune_signatures[stromal_immune_signatures =='TXNDC3'] <- 'NME8'
 stromal_immune_signatures[stromal_immune_signatures =='ODZ4'] <- 'TENM4'
 
-ensembl <- useMart("ensembl", dataset = "hsapiens_gene_ensembl")
+ensembl <- useMart("ensembl", host="https://asia.ensembl.org", dataset = "hsapiens_gene_ensembl")
 
 stromal_immune_genes <- getBM(attributes = c('hgnc_symbol', 'ensembl_gene_id','entrezgene_id'),
                       filters = 'hgnc_symbol',
                       values = cbind(stromal_immune_signatures$Stromal, stromal_immune_signatures$Immune),
                       mart = ensembl)
 
-transcriptome_fpkm_uq2 <- substring_colnames(transcriptome_fpkm_uq1,9,12)
+
+transcriptome_fpkm_uq2 <- transcriptome_fpkm_uq1
+
+colnames(transcriptome_fpkm_uq2) <- substr(colnames(transcriptome_fpkm_uq1),9,12)
 rownames(transcriptome_fpkm_uq2) <- substr(rownames(transcriptome_fpkm_uq2),1,15)
 
 # 6 patients are duplicated so we're removing them here.
@@ -2132,7 +2141,7 @@ calculated_singscore_purity <- data.frame(`edgeR_filterbyExpr(10,25)` = (1-purit
 keep.genes.cancer <- apply(assay(data_transcriptome,'unstranded'), 1, function(x) length(x[x > 15]) >= ncol(transcriptome_fpkm_uq)*.1)
 
 transcriptome_fpkm_uq3 <- transcriptome_fpkm_uq[keep.genes.cancer,]
-transcriptome_fpkm_uq3 <- substring_colnames(transcriptome_fpkm_uq3,9,12)
+colnames(transcriptome_fpkm_uq3) <- substr(colnames(transcriptome_fpkm_uq3),9,12)
 rownames(transcriptome_fpkm_uq3) <- substr(rownames(transcriptome_fpkm_uq3),1,15)
 transcriptome_fpkm_uq3 <- transcriptome_fpkm_uq3[,!duplicated(colnames(transcriptome_fpkm_uq3))]
 
@@ -2222,8 +2231,6 @@ ggplot(mapping = aes(x = calculated_singscore_purity$edgeR_filterbyExpr.10.25., 
 Convert LCM data into fpkm_uq and then try to do purity estimation to see how pure the LCM data is
 
 ```{r}
-ensembl <- useMart("ensembl", dataset = "hsapiens_gene_ensembl")
-
 gene_lengths <- getBM(attributes = c('hgnc_symbol', 'gene_biotype', 'chromosome_name', 'start_position', 'end_position','ensembl_gene_id','entrezgene_id'),
                       filters = 'hgnc_symbol',
                       values = rownames(LCM_counts1),
@@ -2237,8 +2244,8 @@ gene_lengths <- gene_lengths[!duplicated(gene_lengths$hgnc_symbol),]
 
 rownames(gene_lengths) <- gene_lengths[,1]
 
-LCM_counts3 <- lineup_samples(list(LCM_counts1, gene_lengths), direction = 'rows')[[1]]
-gene_lengths <- lineup_samples(list(LCM_counts1, gene_lengths), direction = 'rows')[[2]]
+LCM_counts3 <- lineup_samples(list(LCM_counts1[edgeR::filterByExpr(LCM_counts1,5,20),], gene_lengths), direction = 'rows')[[1]]
+gene_lengths <- lineup_samples(list(LCM_counts1[edgeR::filterByExpr(LCM_counts1,5,20),], gene_lengths), direction = 'rows')[[2]]
 
 ```
 
@@ -2250,7 +2257,7 @@ gene_lengths <- lineup_samples(list(LCM_counts1, gene_lengths), direction = 'row
 gene_lengths$gene_lengths_kb <- gene_lengths$length / 1000
 normalized_counts <- sweep(LCM_counts3, 1, gene_lengths$gene_lengths_kb, FUN = "/")
 
-upper_quartile <- as.vector(apply(normalized_counts, 1, function(x) quantile(x, probs=0.75, na.rm=TRUE)))
+upper_quartile <- as.vector(apply(normalized_counts, 1, function(x) quantile(x, probs=0.75, na.rm=TRUE))+1e-9)
 
 LCM_fpkm_uq <- sweep(normalized_counts, 1, upper_quartile, FUN = "/") * 1e6
 
@@ -2269,21 +2276,34 @@ purity_test1 <- singscore::simpleScore(rank_data_temp,
 
 purity_test1$Purity <- (1-purity_test1$TotalScore)
 
-hist(purity_test1$Purity)
+ggplot(mapping = aes(x=purity_test1$Purity))+
+  geom_density(fill='grey80', color='grey70', alpha=0.3)+
+  theme_minimal() +
+  theme(axis.line = element_line(colour = "grey83", linewidth = 1.1),
+          panel.border = element_rect(colour = "grey90", fill=NA, size=0.7),
+          panel.grid.major = element_line(color = "grey96"),
+          aspect.ratio = 1/1.4) +
+    ggtitle('Distribution of Adj.Pvalues for subtype & purity two-way ANOVA')
 ```
 
 
 ```{r}
-keep_genes_LCM <- apply(normalized_counts, 1, function(x) length(x[x > 10]) >= ncol(LCM_counts1)*.1)
 
-purity_test1 <- singscore::simpleScore(rankGenes(normalized_counts[keep_genes_LCM,]), 
+purity_test1 <- singscore::simpleScore(singscore::rankGenes(LCM_fpkm_uq), 
                                       upSet = as.vector(unique(stromal_immune_genes$hgnc_symbol)),
                                       centerScore = F,
                                       knownDirection = T)
 
 purity_test1$Purity <- (1-purity_test1$TotalScore)
 
-hist(purity_test1$Purity)
+ggplot(mapping = aes(x=purity_test1$Purity))+
+  geom_density(fill='grey80', color='grey70', alpha=0.3)+
+  theme_minimal() +
+  theme(axis.line = element_line(colour = "grey83", linewidth = 1.1),
+          panel.border = element_rect(colour = "grey90", fill=NA, size=0.7),
+          panel.grid.major = element_line(color = "grey96"),
+          aspect.ratio = 1/1.4) +
+    ggtitle('Distribution of Adj.Pvalues for subtype & purity two-way ANOVA')
 
 ```
 
@@ -2315,14 +2335,14 @@ OV_subtypes1$Subtype <- subtype
 
 OV_subtypes1$Purity <- data_transcriptome2@colData$purity_HTseq_FPKM_UQ
 
-
+data_transcriptome1@colData$Calculated_singscore_purity <- calculated_singscore_purity$edgeR_filterbyExpr.10.25.
 ```
 
 
 
 ```{r}
 
-ggplot(mapping = aes(x=data_transcriptome1@colData$purity_HTseq_FPKM_UQ,y=data_transcriptome1@colData$Calculated_singscore_purity))+
+ggplot(mapping = aes(x=data_transcriptome1@colData$purity_HTseq_FPKM_UQ, y=data_transcriptome1@colData$Calculated_singscore_purity))+
   geom_point( alpha = 0.4, color = 'grey30',)+
   theme_minimal() +
   labs(x = 'Original purity', y = 'Calculated purity') +
@@ -2386,10 +2406,27 @@ ggplot(mapping=aes(x=transcript_subtype_purity_anova$Interaction_Adj_PValue))+
 
 ```{r}
 
-plot_PCA(assay(data_transcriptome1,'transcriptome_matrix1')[which(transcript_subtype_purity_anova$Interaction_Adj_PValue > 0.99),],'genes with high interaction between purity & subtype',data_transcriptome1@colData$subtype,'subtype', pcs=c(1,2))
+plot_PCA(assay(data_transcriptome1,'transcriptome_matrix1')[which(transcript_subtype_purity_anova$Interaction_Adj_PValue < 0.3),],'genes with high interaction between purity & subtype',data_transcriptome1@colData$subtype,'subtype', pcs=c(1,2))
 
 
 ```
+
+```{r}
+
+library(plotly)
+
+plot_ly(data = as.data.frame(prcomp(assay(data_transcriptome1,'transcriptome_matrix1')[which(transcript_subtype_purity_anova$Interaction_Adj_PValue < 0.3),])[[2]]), 
+        x = ~PC1, y = ~PC2, z = ~PC3, color = data_transcriptome1@colData$subtype, 
+        type = 'scatter3d', mode = 'markers',
+        marker = list(size = 4, opacity = 0.8)) %>%
+  layout(title = '3D PCA Plot',
+         scene = list(xaxis = list(title = 'PC1'),
+                      yaxis = list(title = 'PC2'),
+                      zaxis = list(title = 'PC3')))
+
+
+```
+
 
 ```{r}
 
@@ -2426,7 +2463,7 @@ ggplot(mapping=aes(x=transcript_subtype_purity_anova$Interaction_Adj_PValue[whic
 ```
 
 ```{r}
-genes_w_subtype_purity_interaction_info <- getBM(attributes = c('ensembl_gene_id', 'external_gene_name', 'gene_biotype',
+genes_w_subtype_purity_interaction_info <- getBM(attributes = c('ensembl_gene_id', 'entrezgene_id','external_gene_name', 'gene_biotype',
                                                                 'description'   # 'name_1006', 'go_linkage_type'
                                                                 ),
                    filters = 'ensembl_gene_id', 
@@ -2440,7 +2477,7 @@ rownames(genes_w_subtype_purity_interaction_info) <- rownames(transcript_subtype
 
 ```{r}
 
-ggplot(mapping = aes(x=log(transcriptome_fpkm_uq[,colnames(transcriptome_fpkm_uq) %in% colnames(transcriptome_fpkm_uq1)]+1)["ENSG00000128564.7",], 
+ggplot(mapping = aes(x=log(transcriptome_fpkm_uq[,colnames(transcriptome_fpkm_uq) %in% colnames(transcriptome_fpkm_uq1)]+1)["ENSG00000011600.12",], 
                      y= calculated_singscore_purity$edgeR_filterbyExpr.10.25., color= data_transcriptome1@colData$subtype)) +
   geom_point(alpha=0.72) + # alpha for transparency to see overlap
   labs(x="Expression levels of ENSG00000128564.7 (log fpkm uq)", 
@@ -2457,6 +2494,51 @@ ggplot(mapping = aes(x=log(transcriptome_fpkm_uq[,colnames(transcriptome_fpkm_uq
 ```
 
 ```{r}
+
+plot_boxplot_categorical(log(transcriptome_fpkm_uq[,colnames(transcriptome_fpkm_uq) %in% colnames(transcriptome_fpkm_uq1)]+1)["ENSG00000011600.12",],
+                         data_transcriptome1@colData$subtype,
+                         c('Transmembrane immune signaling adaptor TYROBP', 'subtype'), aspect_ratio = 1.2) +
+  labs(y= 'Expression (log fpkm_uq)')
+
+
+```
+
+```{r, fig.width= 11}
+
+ego <- enrichGO(gene = genes_w_subtype_purity_interaction_info$ensembl_gene_id,
+                OrgDb = 'org.Hs.eg.db', 
+                keyType = "ENSEMBL", 
+                ont = "BP", 
+                pAdjustMethod = "BH",
+                pvalueCutoff = 0.2)
+
+enrichplot::dotplot(ego, label_format = 100) +
+  theme(aspect.ratio = 1/0.5)
+  
+
+```
+```{r,fig.width= 11}
+genes_w_subtype_purity_interaction_info1 <- getBM(attributes = c('ensembl_gene_id', 'entrezgene_id','external_gene_name', 'gene_biotype',
+                                                                'description'   # 'name_1006', 'go_linkage_type'
+                                                                ),
+                   filters = 'ensembl_gene_id', 
+                   values = substr(rownames(transcript_subtype_purity_anova[which(transcript_subtype_purity_anova$Interaction_Adj_PValue<0.3),]),1,15), 
+                   mart = ensembl)
+
+
+enrichplot::dotplot(enrichGO(gene = genes_w_subtype_purity_interaction_info1$ensembl_gene_id,
+                OrgDb = 'org.Hs.eg.db', 
+                keyType = "ENSEMBL", 
+                ont = "BP", 
+                pAdjustMethod = "BH",
+                pvalueCutoff = 0.2), 
+                label_format = 100)+
+  theme(aspect.ratio = 1/0.5)
+```
+
+
+```{r}
+
 
 
 
