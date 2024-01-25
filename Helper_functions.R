@@ -104,17 +104,17 @@ lineup_samples <- function(matrix_list, direction = 'columns'){
   # others, and line up all the common samples in the same order in all matrices.
   # outputs a list of the processed matrices.
   
-  if( direction == 'columns'){
-    common_samples <- Reduce(intersect, lapply(matrix_list,colnames))
-    matrix_list_aligned <- lapply(matrix_list, function(matrix) {matrix[, common_samples, drop = FALSE]})
-  }
-  
-  if( direction == 'rows'){
+  if(direction == 'rows'){
     common_samples <- Reduce(intersect, lapply(matrix_list,rownames))
     matrix_list_aligned <- lapply(matrix_list, function(matrix) {matrix[common_samples, , drop = FALSE]})
   }
+  
+  if(direction == 'columns'){
+    common_samples <- Reduce(intersect, lapply(matrix_list,colnames))
+    matrix_list_aligned <- lapply(matrix_list, function(matrix) {matrix[, common_samples, drop = FALSE]})
+  }
     
-  else{stop("The direction you entered is invalid. You can only enter 'rows' or 'columns'.")}
+  if(!(direction %in% c('columns','rows'))){stop("The direction you entered is invalid. You can only enter 'rows' or 'columns'.")}
   
   return(matrix_list_aligned)
 }
@@ -264,7 +264,7 @@ plot_vector_correlation <- function(pca_list, dataset_names, variable_vector, va
 
 
 
-plot_boxplot_categorical <- function(data_vector, category_vector, names){
+plot_boxplot_categorical <- function(data_vector, category_vector, names, aspect_ratio=1.3){
   # taking a vector of numerical scores and a vector of categorical variables and their names as vector, plot boxplot grouped by the categorical variables.
   data <- as.data.frame(cbind(data_vector, category_vector))
   colnames(data) <- names
@@ -273,7 +273,12 @@ plot_boxplot_categorical <- function(data_vector, category_vector, names){
     geom_boxplot()+
     theme(axis.text.x = element_blank())+
     labs(x = names[2], y = names[1], fill=names[2] )+
-    ggtitle(paste0('Boxplot of ',names[1],' grouped by ',names[2]))
+    ggtitle(paste0('Boxplot of ',names[1],' grouped by ',names[2]))+
+    theme_minimal() +
+    theme(panel.border=element_rect(colour = "grey80", fill=NA, size=0.8),
+          aspect.ratio = 1/aspect_ratio,
+          axis.line = element_line(colour = "grey75", linewidth = 1.1),
+          panel.grid.major = element_line(color = "grey96"),)
   
   
 }
