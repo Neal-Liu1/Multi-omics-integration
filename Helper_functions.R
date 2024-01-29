@@ -85,6 +85,27 @@ plot_PCA <- function(matrix, dataset_name, labels, label_name, pcs= c(1,2)){
 
 
 
+
+plot_3D_PCA <- function(matrix, label_vector = NULL, title = "3D PCA Plot"){
+  # Plot an interactive 3D PCA using plotly of the first 3 PCs. 
+  
+  plot_ly(data = as.data.frame(prcomp(matrix)[[2]]), 
+          x = ~PC1, y = ~PC2, z = ~PC3, color = label_vector, 
+          type = 'scatter3d', mode = 'markers',
+          marker = list(size = 4, opacity = 0.8)) %>%
+    layout(title = title,
+           scene = list(xaxis = list(title = 'PC1'),
+                        yaxis = list(title = 'PC2'),
+                        zaxis = list(title = 'PC3')))
+  
+}
+
+
+
+
+
+
+
 remove_all_low_number_rows <- function(matrix, number){
   # removes all rows in a matrix with max value less than the number
   max_values <- apply(matrix, 1, max)  # Calculate the max of each row
@@ -127,11 +148,7 @@ lineup_samples <- function(matrix_list, direction = 'columns'){
 remove_all_zero_variance_rows <- function(matrix){
   # taking a matrix, removes all rows with 0 variance
   variances <- apply(matrix, 1, var)
-  
-  # Identify rows with zero variance
   rows_to_keep <- variances != 0
-  
-  # Subset the matrix to keep only rows with non-zero variance
   return(matrix[rows_to_keep, , drop = FALSE])
   
 }
@@ -157,8 +174,10 @@ compute_log_transformed_RLE <- function(matrix){
 
 
 
-plot_RLE <- function(RLE_matrix, batch_info, ylimit=c(-10,10)){
+plot_RLE <- function(matrix, batch_info, ylimit=c(-10,10)){
   # taking a matrix of RLE scores, and a vector of batch information (in the same order as your samples), and y axis limits as a vector of 2 numbers, output an RLE graph ordered by batch
+  
+  RLE_matrix <- as.data.frame(compute_log_transformed_RLE(matrix))
   
   RLE_long <- reshape2::melt(RLE_matrix)
   
@@ -470,13 +489,6 @@ plot_tSNE <- function(matrix, metadata_vector, matrix_name, metadata_name){
 
 
 
-
-
-
-
-
-
-
 basic_count_normalization <- function(matrix, type='', log.transform = F){
   # taking a matrix of raw counts, convert to FPKM, FPKM_UQ or TPM. 
   # if log.transform is set to True the output matrix will also be log transformed for you (log base 2 + 1 pseudo count)
@@ -485,6 +497,43 @@ basic_count_normalization <- function(matrix, type='', log.transform = F){
   
   
 }
+
+
+
+
+
+plot_count_map <- function(matrix, count_by){
+  #
+  #
+  
+  
+  
+}
+
+
+
+
+
+plot_GO_enrichment <- function(gene_name_vector, gene_id_type = 'ENSEMBL', ontology = 'BP', pval_cutoff = 0.2){
+  # Taking a vector of gene names, plot GO enrichment dotplot. Default ontology is biological process. 
+  
+  if(!(gene_id_type %in% c('ENSEMBL','ENTREZID'))){stop("The gene id type you entered doesn't exist. You can choose from 'ENTREZID' and 'ENSEMBL'.")}
+  if(!(ontology %in% c('BP','CC','MF'))){stop("The ontology you entered doesn't exist. You can choose from 'BP', 'CC' and 'MF'.")}
+  
+  enrich_obj <- enrichGO(gene = gene_name_vector,
+                         OrgDb = 'org.Hs.eg.db', 
+                         keyType = gene_id_type, 
+                         ont = ontology, 
+                         pAdjustMethod = "BH",
+                         pvalueCutoff = pval_cutoff)
+  
+  enrichplot::dotplot(enrich_obj, 
+                      label_format = 100)
+  
+}
+
+
+
 
 
 
