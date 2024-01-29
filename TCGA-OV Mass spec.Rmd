@@ -50,25 +50,14 @@ source('Helper_functions.R')
 
 ```
 
-Download data from TCGA biolinks
+Load TCGA data
 
 ```{r}
 
 # Using illumina infinium 27k instead of 450k because most of the patients are 27k and 450k only has 10 patients.
 
-query_methylation <- GDCquery(project = "TCGA-OV", 
-                              data.category = "DNA Methylation",
-                              platform = "Illumina Human Methylation 27",
-                              data.type = "Methylation Beta Value")
-
-data_methylation <- GDCprepare(query_methylation, directory='Data/GDCData')
-
-query_transcriptome <- GDCquery(project = "TCGA-OV", 
-                                data.category = "Transcriptome Profiling",
-                                data.type = "Gene Expression Quantification")
-
-data_transcriptome <- GDCprepare(query_transcriptome, directory='Data/GDCData')
-
+data_transcriptome <- readRDS('Data/transcriptome_data.rds')
+data_methylation <- readRDS('Data/methylation_data.rds')
 
 # Load proteome data
 
@@ -2540,11 +2529,12 @@ Try to use RUV-III on only the very confidently subtyped samples. Since the pack
 ```{r}
 
 data_transcriptome1@colData$Confident_subtypes <- ifelse(OV_subtypes1$`1st&2nd_subtype_difference` > 0.4, 'yes', 'no')
+data_transcriptome1@colData$log2_libsize <- log2(data_transcriptome1@colData$lib_size)
 
 PRPS_confident_subtypes <- supervisedPRPS(se.obj=data_transcriptome1[,which(data_transcriptome1@colData$Confident_subtypes == 'yes')],
                        assay.name='transcriptome_matrix1',
                        bio.variable= 'subtype',
-                       uv.variables=c('lib_size','batch','Calculated_singscore_purity'),
+                       uv.variables=c('log2_libsize','batch','Calculated_singscore_purity'),
                        batch.variable = 'batch',
                        min.sample.for.prps = 3,
                        min.sample.per.batch= 3,
@@ -2629,7 +2619,7 @@ PRPS_confident_subtypes@metadata <- PRPS_metadata
 PRPS_confident_subtypes <- supervisedFindNCG(se.obj=PRPS_confident_subtypes,
                          assay.name= 'transcriptome_matrix1',
                          bio.variables= 'subtype',
-                         uv.variables= c('lib_size','batch','Calculated_singscore_purity'),
+                         uv.variables= c('log2_libsize','batch','Calculated_singscore_purity'),
                          no.ncg = 1000,
                          regress.out.uv.variables = F,
                          regress.out.bio.variables = F,
@@ -2666,45 +2656,41 @@ PRPS_confident_subtypes <- ruvIIIMultipleK(se.obj=PRPS_confident_subtypes,
 
 ```
 
-```{r}
-plot_linear_correlation(PRPS_confident_subtypes@assays@data@listData,
-                        c('unnormalized','RUV-K4'),
-                        log2(PRPS_confident_subtypes@colData$lib_size),
-                        'libsize')
 
+```{r, fig.width= 12}
 
-```
-
-```{r}
-
-plot_vector_correlation(list(prcomp(t(assay(PRPS_confident_subtypes,'transcriptome_matrix1'))),
-                             prcomp(t(assay(PRPS_confident_subtypes,'RUV_K4_on_transcriptome_matrix1')))),
-                        c('unnormalized','RUV-K4'),
-                        PRPS_confident_subtypes@colData$batch,
-                        'batch'
-                        )
-
-```
-
-```{r}
-
-plot_vector_correlation(list(prcomp(t(assay(PRPS_confident_subtypes,'transcriptome_matrix1'))),
+p1 <- plot_vector_correlation(list(prcomp(t(assay(PRPS_confident_subtypes,'transcriptome_matrix1'))),
                              prcomp(t(assay(PRPS_confident_subtypes,'RUV_K4_on_transcriptome_matrix1')))),
                         c('unnormalized','RUV-K4'),
                         PRPS_confident_subtypes@colData$subtype,
                         'subtypes'
                         )
 
-```
+p2 <- plot_vector_correlation(list(prcomp(t(assay(PRPS_confident_subtypes,'transcriptome_matrix1'))),
+                             prcomp(t(assay(PRPS_confident_subtypes,'RUV_K4_on_transcriptome_matrix1')))),
+                        c('unnormalized','RUV-K4'),
+                        PRPS_confident_subtypes@colData$batch,
+                        'batch'
+                        )
 
-```{r}
-plot_linear_correlation(PRPS_confident_subtypes@assays@data@listData,
+p3 <- plot_linear_correlation(PRPS_confident_subtypes@assays@data@listData,
+                        c('unnormalized','RUV-K4'),
+                        PRPS_confident_subtypes@colData$log2_libsize,
+                        'log2 libsize')
+
+
+p4 <- plot_linear_correlation(PRPS_confident_subtypes@assays@data@listData,
                         c('unnormalized','RUV-K4'),
                         PRPS_confident_subtypes@colData$Calculated_singscore_purity,
                         'purity')
 
+gridExtra::grid.arrange(p1, p2, p3, p4, ncol= 2, nrow = 2)
 
 ```
+
+
+
+
 
 ```{r}
 
@@ -2794,12 +2780,13 @@ PRPS_confident_subtypes_raw_counts <- supervisedFindNCG(se.obj=PRPS_confident_su
 
 replicate.data=t(do.call(cbind, PRPS_confident_subtypes_raw_counts@metadata[['PRPS']][['supervised']]))
 
+
 PRPS_confident_subtypes_raw_counts <- ruvIIIMultipleK(se.obj=PRPS_confident_subtypes_raw_counts,
                     assay.name='raw_counts',
                     apply.log=T,
                     pseudo.count = 1,
                     replicate.data=replicate.data,
-                    ctl=PRPS_confident_subtypes@metadata[['NCG']],
+                    ctl=PRPS_confident_subtypes_raw_counts@metadata[['NCG']],
                     k = 4,
                     eta = NULL,
                     include.intercept = T,
@@ -2812,8 +2799,6 @@ PRPS_confident_subtypes_raw_counts <- ruvIIIMultipleK(se.obj=PRPS_confident_subt
                     save.se.obj = T,
                     verbose = T)
 ```
-
-
 
 
 ```{r,, fig.width= 8}
@@ -2855,29 +2840,252 @@ gridExtra::grid.arrange(
 
 p1 <- plot_vector_correlation(list(prcomp(t(assay(PRPS_confident_subtypes_raw_counts,'raw_counts'))),
                              prcomp(t(assay(PRPS_confident_subtypes_raw_counts,'RUV_K4_on_raw_counts')))),
-                        c('unnormalized','RUV-K4'),
+                        c('unnormalized','RUV-K5'),
                         PRPS_confident_subtypes_raw_counts@colData$subtype,
                         'subtypes'
                         )
 
 p2 <- plot_vector_correlation(list(prcomp(t(assay(PRPS_confident_subtypes_raw_counts,'raw_counts'))),
                              prcomp(t(assay(PRPS_confident_subtypes_raw_counts,'RUV_K4_on_raw_counts')))),
-                        c('unnormalized','RUV-K4'),
+                        c('unnormalized','RUV-K5'),
                         PRPS_confident_subtypes_raw_counts@colData$batch,
                         'batch'
                         )
 
 p3 <- plot_linear_correlation(PRPS_confident_subtypes_raw_counts@assays@data@listData,
-                        c('unnormalized','RUV-K4'),
+                        c('unnormalized','RUV-K5'),
                         PRPS_confident_subtypes_raw_counts@colData$log2_libsize,
                         'log2 libsize')
 
 p4 <- plot_linear_correlation(PRPS_confident_subtypes_raw_counts@assays@data@listData,
-                        c('unnormalized','RUV-K4'),
+                        c('unnormalized','RUV-K5'),
                         PRPS_confident_subtypes_raw_counts@colData$Calculated_singscore_purity,
                         'purity')
 
 gridExtra::grid.arrange(p1, p2, p3, p4, ncol= 2, nrow = 2)
+
+```
+
+```{r}
+
+plot_PCA(assay(PRPS_confident_subtypes_raw_counts,'RUV_K4_on_raw_counts'),'RUV-K4 raw counts',PRPS_confident_subtypes_raw_counts@colData$subtype,'subtypes', pcs= c(1,2))
+
+
+```
+
+```{r}
+
+plot_ly(data = as.data.frame(prcomp(assay(PRPS_confident_subtypes_raw_counts,'RUV_K4_on_raw_counts'))[[2]]), 
+        x = ~PC1, y = ~PC2, z = ~PC3, color = data_transcriptome1@colData$subtype, 
+        type = 'scatter3d', mode = 'markers',
+        marker = list(size = 4, opacity = 0.8)) %>%
+  layout(title = 'PCA of RUV-K4 raw counts',
+         scene = list(xaxis = list(title = 'PC1'),
+                      yaxis = list(title = 'PC2'),
+                      zaxis = list(title = 'PC3')))
+```
+
+
+
+```{r, fig.height=6,fig.width=19}
+
+plot_RLE(assay(PRPS_confident_subtypes_raw_counts,'RUV_K4_on_raw_counts')[,!duplicated(colnames(assay(PRPS_confident_subtypes_raw_counts,'raw_counts')))], PRPS_confident_subtypes_raw_counts@colData$batch[!duplicated(colnames(assay(PRPS_confident_subtypes_raw_counts,'raw_counts')))], ylimit = c(-4,4))
+
+```
+
+```{r, fig.height=6,fig.width=19}
+
+plot_RLE(log2(assay(PRPS_confident_subtypes_raw_counts,'raw_counts')+1)[,!duplicated(colnames(assay(PRPS_confident_subtypes_raw_counts,'raw_counts')))], PRPS_confident_subtypes_raw_counts@colData$batch[!duplicated(colnames(assay(PRPS_confident_subtypes_raw_counts,'raw_counts')))], ylimit = c(-4,4))
+
+```
+
+Normalizing the methylation
+
+```{r, fig.height=6,fig.width=19}
+
+methylation_M_values <- log2(methylation_matrix1/(1-methylation_matrix1))
+methylation_M_values <- methylation_M_values[,!duplicated(colnames(methylation_M_values))]
+methylation_batches1 <- as.data.frame(methylation_batches[!duplicated(substr(methylation_batches$aliquot_barcode,9,12)),])
+
+rownames(methylation_batches1) <- substr(methylation_batches1$aliquot_barcode,9,12)
+
+methylation_M_values1 <- lineup_samples(list(methylation_M_values, t(methylation_batches1), PRPS_confident_subtypes_raw_counts))[[1]]
+methylation_batches1 <- lineup_samples(list(methylation_M_values, t(methylation_batches1), PRPS_confident_subtypes_raw_counts))[[2]]
+
+PRPS_confident_subtypes_aligned <- lineup_samples(list(methylation_M_values, methylation_batches1, PRPS_confident_subtypes_raw_counts))[[3]]
+methylation_batches2 <- as.data.frame(t(methylation_batches1))
+
+plot_RLE(methylation_M_values1, methylation_batches2$batch_id, ylim=c(-4, 4))
+
+```
+
+
+
+```{r}
+
+PRPS_confident_subtypes_M_values <- SummarizedExperiment(assays = list(M_values = as.matrix(methylation_M_values1)), colData = PRPS_confident_subtypes_aligned@colData)
+
+PRPS_confident_subtypes_M_values@colData$batch <- methylation_batches2$batch_id
+
+PRPS_confident_subtypes_M_values1 <- PRPS_confident_subtypes_M_values
+
+PRPS_confident_subtypes_M_values <- supervisedPRPS(se.obj=PRPS_confident_subtypes_M_values[,which(PRPS_confident_subtypes_M_values@colData$Confident_subtypes == 'yes')],
+                       assay.name='M_values',
+                       bio.variable= 'subtype',
+                       uv.variables=c('batch','Calculated_singscore_purity'),
+                       batch.variable = 'batch',
+                       min.sample.for.prps = 3,
+                       min.sample.per.batch= 3,
+                       apply.log = F,
+                       pseudo.count = 1,
+                       assess.se.obj = T,
+                       assess.cor.variables = T,
+                       save.se.obj = TRUE,
+                       verbose = T)
+
+
+PRPS_metadata <- PRPS_confident_subtypes_M_values@metadata
+PRPS_confident_subtypes_M_values <- PRPS_confident_subtypes_M_values1
+PRPS_confident_subtypes_M_values@metadata <- PRPS_metadata
+
+
+PRPS_confident_subtypes_M_values <- supervisedFindNCG(se.obj=PRPS_confident_subtypes_M_values,
+                         assay.name= 'M_values',
+                         bio.variables= 'subtype',
+                         uv.variables= c('batch','Calculated_singscore_purity'),
+                         no.ncg = 1000,
+                         regress.out.uv.variables = F,
+                         regress.out.bio.variables = F,
+                         apply.normalization= F,
+                         normalization =  'CPM',
+                         assess.se.obj = T,
+                         apply.log = F,
+                         pseudo.count = 1,
+                         save.se.obj = TRUE,
+                         verbose = T)
+
+replicate.data=t(do.call(cbind, PRPS_confident_subtypes_M_values@metadata[['PRPS']][['supervised']]))
+
+
+PRPS_confident_subtypes_M_values <- ruvIIIMultipleK(se.obj=PRPS_confident_subtypes_M_values,
+                    assay.name='M_values',
+                    apply.log=F,
+                    pseudo.count = 1,
+                    replicate.data=replicate.data,
+                    ctl=PRPS_confident_subtypes_M_values@metadata[['NCG']],
+                    k = 12,
+                    eta = NULL,
+                    include.intercept = T,
+                    apply.average.rep = F,
+                    fullalpha = NULL,
+                    return.info = F,
+                    inputcheck = T,
+                    assess.se.obj = T,
+                    remove.na = 'measurements',
+                    save.se.obj = T,
+                    verbose = T)
+
+
+```
+
+
+
+```{r,, fig.width= 8}
+
+NCGs <- rownames(assay(PRPS_confident_subtypes_M_values,'M_values'))[PRPS_confident_subtypes_M_values@metadata$NCG]
+
+NCG_pca_M_values <- as.data.frame(list(BiocSingular::runSVD(t(assay(PRPS_confident_subtypes_M_values,'M_values')[NCGs,]),k=3,center=T))[[1]]$u)
+
+p1 <- ggplot(mapping = aes(x=log2(PRPS_confident_subtypes_M_values@colData$log2_libsize),y=NCG_pca_M_values$V1))+
+  geom_point(alpha=0.62, color= 'grey30') + # alpha for transparency to see overlap
+  labs(y="PC1 of NCGs", 
+       x="Log2 lib-size") +
+  theme_minimal()+
+  ggtitle('1st PC of negative control genes vs lib size') +
+  theme(panel.border=element_rect(colour = "grey80", fill=NA, size=0.8),
+        aspect.ratio = 1/1.05,
+        axis.line = element_line(colour = "grey75", linewidth = 1.1),
+        panel.grid.major = element_line(color = "grey96"),)
+
+p2 <- ggplot(mapping = aes(x=log2(PRPS_confident_subtypes_M_values@colData$Calculated_singscore_purity),y=NCG_pca_M_values$V1))+
+  geom_point(alpha=0.62, color= 'grey30') + # alpha for transparency to see overlap
+  labs(y="PC1 of NCGs", 
+       x="Purity") +
+  theme_minimal()+
+  ggtitle('1st PC of negative control genes vs purity') +
+  theme(panel.border=element_rect(colour = "grey80", fill=NA, size=0.8),
+        aspect.ratio = 1/1.05,
+        axis.line = element_line(colour = "grey75", linewidth = 1.1),
+        panel.grid.major = element_line(color = "grey96"),)
+
+gridExtra::grid.arrange(
+  p1,
+  p2,
+  ncol = 2)
+
+```
+
+
+
+
+
+```{r, fig.width= 12}
+
+p1 <- plot_vector_correlation(list(prcomp(t(assay(PRPS_confident_subtypes_M_values,'M_values'))),
+                             prcomp(t(assay(PRPS_confident_subtypes_M_values,'RUV_K12_on_M_values')))),
+                        c('unnormalized','RUV-K12'),
+                        PRPS_confident_subtypes_M_values@colData$subtype,
+                        'subtypes'
+                        )
+
+p2 <- plot_vector_correlation(list(prcomp(t(assay(PRPS_confident_subtypes_M_values,'M_values'))),
+                             prcomp(t(assay(PRPS_confident_subtypes_M_values,'RUV_K12_on_M_values')))),
+                        c('unnormalized','RUV-K12'),
+                        PRPS_confident_subtypes_M_values@colData$batch,
+                        'batch'
+                        )
+
+p3 <- plot_linear_correlation(PRPS_confident_subtypes_M_values@assays@data@listData,
+                        c('unnormalized','RUV-K12'),
+                        PRPS_confident_subtypes_M_values@colData$log2_libsize,
+                        'log2 libsize')
+
+p4 <- plot_linear_correlation(PRPS_confident_subtypes_M_values@assays@data@listData,
+                        c('unnormalized','RUV-K12'),
+                        PRPS_confident_subtypes_M_values@colData$Calculated_singscore_purity,
+                        'purity')
+
+gridExtra::grid.arrange(p1, p2, p3, p4, ncol= 2, nrow = 2)
+
+```
+
+```{r}
+
+plot_3D_PCA(assay(PRPS_confident_subtypes_M_values,'M_values')[NCGs,], PRPS_confident_subtypes_M_values@colData$batch)
+
+```
+
+```{r}
+
+plot_3D_PCA(assay(PRPS_confident_subtypes_M_values,'RUV_K12_on_M_values')[NCGs,], PRPS_confident_subtypes_M_values@colData$batch)
+
+```
+
+
+```{r, fig.height=6,fig.width=19}
+
+plot_RLE(assay(PRPS_confident_subtypes_M_values,'RUV_K12_on_M_values'), PRPS_confident_subtypes_M_values@colData$batch, ylim=c(-4, 4))
+
+
+```
+
+```{r, fig.width= 12}
+
+p1 <- plot_PCA(assay(PRPS_confident_subtypes_M_values,'M_values')[NCGs,],'unnormalized control genes',PRPS_confident_subtypes_M_values@colData$batch, 'batch', pcs= c(1,2))
+p2 <- plot_PCA(assay(PRPS_confident_subtypes_M_values,'RUV_K12_on_M_values')[NCGs,],'normalized control genes',PRPS_confident_subtypes_M_values@colData$batch, 'batch', pcs= c(1,2))
+
+
+gridExtra::grid.arrange(p1, p2,  ncol= 2)
 
 ```
 
