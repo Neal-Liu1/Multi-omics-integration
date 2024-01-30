@@ -37,16 +37,10 @@ source('Helper_functions.R')
 ```{r}
 
 data_transcriptome <- readRDS('Data/BRCA (Breast invasive carcinoma).rds')
+data_methylation <- readRDS('Data/BRCA methylation illumina 27k.rds')
 
-methylation_query <- GDCquery(project = 'TCGA-BRCA', 
-                              data.category = 'DNA Methylation' ,
-                              data.type = 'Methylation Beta Value',
-                              platform = 'Illumina Human Methylation 27',)
 
-GDCdownload(methylation_query, directory = 'Data/GDCdata')
-
-data_methylation <- GDCprepare(methylation_query, directory = 'Data/GDCdata')
-
+# trying to get the 450k data
 methylation_query1 <- GDCquery(project = 'TCGA-BRCA', 
                               data.category = 'DNA Methylation' ,
                               data.type = 'Methylation Beta Value',
@@ -62,16 +56,47 @@ data_methylation <- GDCprepare(methylation_query1, directory = 'Data/GDCdata')
 
 ```{r}
 
+sum(edgeR::filterByExpr(assay(data_transcriptome,'HTseq_counts'), min_count = 10, min.total.count = 80))
+
+p1 <- plot_PCA(log2(assay(data_transcriptome, 'HTseq_FPKM')+1)[edgeR::filterByExpr(assay(data_transcriptome,'HTseq_counts'), min_count = 10, min.total.count = 80),],'fpkum uq transcriptome', data_transcriptome@colData$BatchId_mda, 'batch')
+
+p2 <- plot_PCA(log2(assay(data_transcriptome, 'HTseq_FPKM')+1)[edgeR::filterByExpr(assay(data_transcriptome,'HTseq_counts'), min_count = 10, min.total.count = 80),],'fpkum uq transcriptome', data_transcriptome@colData$subtype_BRCA_Subtype_PAM50__RNAseq, 'subtype')
+
+p1
 
 
+```
+```{r}
+p2
+
+```
+
+```{r}
+
+plot_3D_PCA(log2(assay(data_transcriptome, 'HTseq_FPKM')+1)[edgeR::filterByExpr(assay(data_transcriptome,'HTseq_counts'), min_count = 10, min.total.count = 80),], data_transcriptome@colData$subtype_BRCA_Subtype_PAM50__RNAseq)
 
 ```
 
 
+```{r, fig.width=19, fig.height= 6}
+plot_RLE(log2(assay(data_transcriptome,'HTseq_counts')+1)[edgeR::filterByExpr(assay(data_transcriptome,'HTseq_counts'), min_count = 10, min.total.count = 80),1:600], data_transcriptome@colData$BatchId_mda[1:600], ylimit = c(-4, 4))
+
+```
+
+```{r}
+data_methylation <- data_methylation[which(apply(assay(data_methylation), 1, function(x) {sum(is.na(x))/length(x)}) <= 0.2), ]
+assay(data_methylation) <- replace_all_NAs_with_row_means(assay(data_methylation))
+assay(data_methylation, 'M_values') <- log2(assay(data_methylation)/(1-assay(data_methylation)))
+
+plot_PCA(assay(data_methylation,'M_values'),'M values', data_methylation@colData$paper_BRCA_Subtype_PAM50, 'pam50 subtype')
+
+```
+
+```{r, fig.width=19, fig.height= 6}
+plot_RLE(assay(data_methylation,'M_values'),data_methylation@colData$site_of_resection_or_biopsy, ylimit = c(-4,4))
 
 
-
-
+```
 
 
 
