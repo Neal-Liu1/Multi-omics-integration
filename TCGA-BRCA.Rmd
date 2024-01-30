@@ -1,0 +1,78 @@
+---
+title: "TCGA_BRCA"
+author: "Neal Liu"
+date: "2024-01-30"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Load libraries
+
+```{r}
+
+library(TCGAbiolinks)
+library(RUVIIIPRPS)
+library(MOFA2)
+library(ggplot2)
+library(dplyr)
+library(edgeR)
+library(parallel)
+library(readr)
+library(ggExtra)
+library(cowplot)
+library(SummarizedExperiment)
+library(biomaRt)
+library(umap)
+library(Rtsne)
+library(singscore)
+
+source('Helper_functions.R')
+
+```
+
+
+```{r}
+
+data_transcriptome <- readRDS('Data/BRCA (Breast invasive carcinoma).rds')
+
+methylation_query <- GDCquery(project = 'TCGA-BRCA', 
+                              data.category = 'DNA Methylation' ,
+                              data.type = 'Methylation Beta Value',
+                              platform = 'Illumina Human Methylation 27',)
+
+GDCdownload(methylation_query, directory = 'Data/GDCdata')
+
+data_methylation <- GDCprepare(methylation_query, directory = 'Data/GDCdata')
+
+methylation_query1 <- GDCquery(project = 'TCGA-BRCA', 
+                              data.category = 'DNA Methylation' ,
+                              data.type = 'Methylation Beta Value',
+                              platform = 'Illumina Human Methylation 450',)
+
+GDCdownload(methylation_query1, directory = 'Data/GDCdata')
+
+data_methylation <- GDCprepare(methylation_query1, directory = 'Data/GDCdata')
+
+# Vector memory exhausted. Rest in peace. 
+
+```
+
+```{r}
+
+
+
+
+```
+
+
+
+
+
+
+
+
+
+
