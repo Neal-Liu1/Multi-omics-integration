@@ -12,7 +12,6 @@ Load libraries
 
 ```{r}
 
-library(rcompanion)
 library(GenomicRanges)
 library(sesameData)
 library(sesame)
@@ -3088,6 +3087,22 @@ p2 <- plot_PCA(assay(PRPS_confident_subtypes_M_values,'RUV_K12_on_M_values')[NCG
 gridExtra::grid.arrange(p1, p2,  ncol= 2)
 
 ```
+
+Add metadata to the se objects containing the normalized data
+
+```{r}
+
+rowData(PRPS_confident_subtypes_M_values)  <- data_methylation@rowRanges[which(apply(assay(data_methylation), 1, function(x) {sum(is.na(x))/length(x)}) <= 0.3),]
+rowData(PRPS_confident_subtypes_raw_counts) <- data_transcriptome@rowRanges[match(rownames(PRPS_confident_subtypes_raw_counts), data_transcriptome@rowRanges@ranges@NAMES),]
+
+omics_data <- list(PRPS_confident_subtypes_raw_counts, PRPS_confident_subtypes_M_values)
+
+saveRDS(omics_data, file = "Data/Normalized_transcriptome&methylation_TCGA_OV.rds")
+
+```
+
+
+
 
 
 
