@@ -4,9 +4,7 @@ remove_NA_rows <- function(data, fraction_NAs = 0.5){
   # remove all rows in a matrix with fraction of NAs greater than fraction_NAs (default is 0.5)
   
   na_fraction <- apply(data, 1, function(x) {sum(is.na(x))/length(x)})
-  row.names <- rownames(data)
-  new_matrix <- data[which(na_fraction <= fraction_NAs), ,drop=FALSE]
-  rownames(new_matrix) <- unlist(row.names[which(na_fraction <= fraction_NAs)])
+  new_matrix <- data[which(na_fraction <= fraction_NAs),]
 
   return(new_matrix)
   
@@ -17,18 +15,20 @@ remove_NA_rows <- function(data, fraction_NAs = 0.5){
 
 replace_all_NAs_with_row_means <- function(matrix){
   # replaces all NAs in a matrix with the row means
-  output_matrix <- t(apply(matrix, 1, function(row){row[is.na(row)] <- mean(row, na.rm = TRUE) ; return(row)}))
+  output_matrix <- apply(matrix, 1, function(row){row[is.na(row)] <- mean(row, na.rm = TRUE); return(row)})
   
-  return(as.data.frame(output_matrix))
+  return(t(output_matrix))
 }
 
 
 
 
 
-plot_PCA <- function(matrix, dataset_name, labels, label_name, pcs= c(1,2)){
+plot_PCA <- function(matrix, dataset_name, labels, label_name, pcs= c(1,2), is_pca_obj= F){
   # plots a PCA of the data coloured by labels
-  pca_data <- list(BiocSingular::runSVD(t(matrix),k=10,center=T))[[1]]
+  
+  if(is_pca_obj){pca_data <- matrix}
+  else{pca_data <- list(BiocSingular::runSVD(t(matrix),k=10,center=T))[[1]]}
   
   percentage  <- pca_data$d ^ 2 / sum(pca_data$d ^ 2) * 100
   percentage  <- sapply(seq_along(percentage), function(i)
