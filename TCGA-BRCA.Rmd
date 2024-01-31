@@ -38,19 +38,8 @@ source('Helper_functions.R')
 
 data_transcriptome <- readRDS('Data/BRCA (Breast invasive carcinoma).rds')
 data_methylation <- readRDS('Data/BRCA methylation illumina 27k.rds')
+data_methylation_450k <- readRDS('Data/BRCA Methylation 450k.rds')
 
-
-# trying to get the 450k data
-methylation_query1 <- GDCquery(project = 'TCGA-BRCA', 
-                              data.category = 'DNA Methylation' ,
-                              data.type = 'Methylation Beta Value',
-                              platform = 'Illumina Human Methylation 450',)
-
-GDCdownload(methylation_query1, directory = 'Data/GDCdata')
-
-data_methylation <- GDCprepare(methylation_query1, directory = 'Data/GDCdata')
-
-# Vector memory exhausted. Rest in peace. 
 
 ```
 
@@ -61,6 +50,8 @@ sum(edgeR::filterByExpr(assay(data_transcriptome,'HTseq_counts'), min_count = 10
 p1 <- plot_PCA(log2(assay(data_transcriptome, 'HTseq_FPKM')+1)[edgeR::filterByExpr(assay(data_transcriptome,'HTseq_counts'), min_count = 10, min.total.count = 80),],'fpkum uq transcriptome', data_transcriptome@colData$BatchId_mda, 'batch')
 
 p2 <- plot_PCA(log2(assay(data_transcriptome, 'HTseq_FPKM')+1)[edgeR::filterByExpr(assay(data_transcriptome,'HTseq_counts'), min_count = 10, min.total.count = 80),],'fpkum uq transcriptome', data_transcriptome@colData$subtype_BRCA_Subtype_PAM50__RNAseq, 'subtype')
+
+filtered_transcriptome <- data_transcriptome[edgeR::filterByExpr(assay(data_transcriptome,'HTseq_counts'), min_count = 10, min.total.count = 80),]
 
 p1
 
@@ -79,7 +70,7 @@ plot_3D_PCA(log2(assay(data_transcriptome, 'HTseq_FPKM')+1)[edgeR::filterByExpr(
 
 
 ```{r, fig.width=19, fig.height= 6}
-plot_RLE(log2(assay(data_transcriptome,'HTseq_counts')+1)[edgeR::filterByExpr(assay(data_transcriptome,'HTseq_counts'), min_count = 10, min.total.count = 80),1:600], data_transcriptome@colData$BatchId_mda[1:600], ylimit = c(-4, 4))
+plot_RLE(log2(assay(data_transcriptome,'HTseq_counts')+1)[edgeR::filterByExpr(assay(data_transcriptome,'HTseq_counts'), min_count = 10, min.total.count = 80),1:500], data_transcriptome@colData$BatchId_mda[1:500], ylimit = c(-4, 4))
 
 ```
 
@@ -97,6 +88,122 @@ plot_RLE(assay(data_methylation,'M_values'),data_methylation@colData$site_of_res
 
 
 ```
+
+```{r}
+
+# remove methylations that have more than 10% NAs and methylations that do not map to a gene. this ends up with around 330k rows.
+data_methylation_450k <- data_methylation_450k[which(apply(assay(data_methylation_450k), 1, function(x) {sum(is.na(x))/length(x)}) <= 0.1), ]
+data_methylation_450k <- data_methylation_450k[!is.na(data_methylation_450k@rowRanges@elementMetadata@listData$gene),]
+
+# replace remaining NAs with row means and calculate M values
+assay(data_methylation_450k) <- replace_all_NAs_with_row_means(assay(data_methylation_450k))
+
+assay(data_methylation_450k, 'M_values') <- log2(assay(data_methylation_450k)/(1-assay(data_methylation_450k)))
+
+methylation_450k_pca <- list(BiocSingular::runSVD(t(assay(data_methylation_450k,'M_values')),k=10,center=T))[[1]]
+
+plot_PCA(methylation_450k_pca,'M values', data_methylation_450k@colData$paper_BRCA_Subtype_PAM50, 'pam50 subtype', is_pca_obj = T, pcs = c(1,2))
+
+```
+
+Since the methylations are split into 27k and 450k, both having a significant amount of patients, 
+it might be a good idea to combine them by keeping common sites between both. However, we must first 
+check if there is significant effects between the two platforms because we don't know if they use 
+different reagents etc which will have effects on the data distribution. 
+
+
+```{r}
+
+common_methylations <- intersect(rownames(assay(data_methylation,'M_values')),rownames(assay(data_methylation_450k,'M_values')))
+common_patients <- intersect(data_methylation_450k@colData$patient, data_methylation@colData$patient)
+
+`27k_test_matrix` <- assay(data_methylation,'M_values')[common_methylations, sort(which(data_methylation@colData$patient %in% common_patients))]
+`450k_test_matrix` <- assay(data_methylation_450k,'M_values')[common_methylations, sort(which(data_methylation_450k@colData$patient %in% common_patients))]
+
+methylation_platform_correlations <- as.matrix(unlist(lapply(1:length(common_methylations), 
+                                                             function(x) {stats::cor(`27k_test_matrix`[x,],
+                                                                              `450k_test_matrix`[x,], 
+                                                                              method='pearson')})))
+
+p1 <- ggplot(mapping = aes(x= `27k_test_matrix`[,1], y= `450k_test_matrix`[,1])) +
+  geom_point( alpha = 0.05) +
+  theme_minimal() +
+  labs(x = '27k (vial A)', y = '450k (vial B)')+
+  ggtitle('M values of patient A0DC')+
+  theme(panel.border=element_rect(colour = "grey80", fill=NA, size=0.8),
+          aspect.ratio = 1/1.05,
+          axis.line = element_line(colour = "grey75", linewidth = 1.1),
+          panel.grid.major = element_line(color = "grey96"),)
+
+# 0.9489513 correlation
+
+p2 <- ggplot(mapping = aes(x= assay(data_methylation,1)[common_methylations, "TCGA-A7-A0DC-01A-11D-A00Y-05"], 
+                     y= assay(data_methylation_450k,1)[common_methylations, "TCGA-A7-A0DC-01B-04D-A22R-05"])) +
+  geom_point( alpha = 0.05) +
+  theme_minimal() +
+  labs(x = '27k (vial A)', y = '450k (vial B)')+
+  ggtitle('Beta values')+
+  theme(panel.border=element_rect(colour = "grey80", fill=NA, size=0.8),
+          aspect.ratio = 1/1.05,
+          axis.line = element_line(colour = "grey75", linewidth = 1.1),
+          panel.grid.major = element_line(color = "grey96"),)
+
+# 0.9682381 correlation 
+
+gridExtra::grid.arrange(p1,p2, ncol=2)
+
+```
+
+```{r}
+
+p1 <- ggplot(mapping = aes(x= assay(data_methylation,2)[common_methylations, "TCGA-BH-A18V-01A-11D-A12E-05"], 
+                     y= assay(data_methylation_450k,2)[common_methylations, "TCGA-BH-A18V-06A-11D-A212-05"])) +
+  geom_point( alpha = 0.05) +
+  theme_minimal() +
+  labs(x = '27k (primary tumour)', y = '450k (metastatic)')+
+  ggtitle('M values of patient A18V')+
+  theme(panel.border=element_rect(colour = "grey80", fill=NA, size=0.8),
+          aspect.ratio = 1/1.05,
+          axis.line = element_line(colour = "grey75", linewidth = 1.1),
+          panel.grid.major = element_line(color = "grey96"),)
+
+# 0.9138258 correlation
+
+p2 <- ggplot(mapping = aes(x= assay(data_methylation,1)[common_methylations, "TCGA-BH-A18V-01A-11D-A12E-05"], 
+                     y= assay(data_methylation_450k,1)[common_methylations, "TCGA-BH-A18V-06A-11D-A212-05"])) +
+  geom_point( alpha = 0.05) +
+  theme_minimal() +
+  labs(x = '27k (primary tumour)', y = '450k (metastatic)')+
+  ggtitle('Beta values')+
+  theme(panel.border=element_rect(colour = "grey80", fill=NA, size=0.8),
+          aspect.ratio = 1/1.05,
+          axis.line = element_line(colour = "grey75", linewidth = 1.1),
+          panel.grid.major = element_line(color = "grey96"),)
+
+# 0.9146544 correlation 
+
+gridExtra::grid.arrange(p1,p2, ncol=2)
+
+```
+
+```{r}
+
+duplicated_patients_27k <- colnames(data_methylation[, which(data_methylation@colData$patient %in% data_methylation@colData$patient[duplicated(data_methylation@colData$patient)])])
+duplicated_patients_450k <- colnames(data_methylation_450k[, which(data_methylation_450k@colData$patient %in% data_methylation_450k@colData$patient[duplicated(data_methylation_450k@colData$patient)])])
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
 
 
 
