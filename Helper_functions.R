@@ -24,6 +24,18 @@ replace_all_NAs_with_row_means <- function(matrix){
 
 
 
+run_PCA <- function(matrix, pcs= 10){
+  # compute PCA for a set number of PCs using BiocSingular SVD. 
+  pca_obj <- list(BiocSingular::runSVD(t(matrix),k=pcs,center=T))[[1]]
+  colnames(pca_obj$u) <- paste0('PC',1:pcs)
+  
+  return(pca_obj)
+}
+
+
+
+
+
 plot_PCA <- function(matrix, dataset_name, labels, label_name, pcs= c(1,2), is_pca_obj= F){
   # plots a PCA of the data coloured by labels
   
@@ -86,10 +98,13 @@ plot_PCA <- function(matrix, dataset_name, labels, label_name, pcs= c(1,2), is_p
 
 
 
-plot_3D_PCA <- function(matrix, label_vector = NULL, title = "3D PCA Plot"){
+plot_3D_PCA <- function(matrix, label_vector = NULL, title = "3D PCA Plot" , is_PCA_obj = F){
   # Plot an interactive 3D PCA using plotly of the first 3 PCs. 
   
-  plot_ly(data = as.data.frame(prcomp(matrix)[[2]]), 
+  if(is_PCA_obj){data = as.data.frame(matrix)}
+  else{as.data.frame(prcomp(matrix))[[2]]}
+  
+  plot_ly(data = data, 
           x = ~PC1, y = ~PC2, z = ~PC3, color = label_vector, 
           type = 'scatter3d', mode = 'markers',
           marker = list(size = 4, opacity = 0.8)) %>%
