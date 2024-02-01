@@ -188,23 +188,69 @@ gridExtra::grid.arrange(p1,p2, ncol=2)
 
 ```{r}
 
-duplicated_patients_27k <- colnames(data_methylation[, which(data_methylation@colData$patient %in% data_methylation@colData$patient[duplicated(data_methylation@colData$patient)])])
-duplicated_patients_450k <- colnames(data_methylation_450k[, which(data_methylation_450k@colData$patient %in% data_methylation_450k@colData$patient[duplicated(data_methylation_450k@colData$patient)])])
+data_methylation_450k@colData <- data_methylation_450k@colData[colnames(data_methylation_450k@colData) %in% colnames(data_methylation@colData)]
+data_methylation_450k@colData$platform <- '450k'
 
+
+data_methylation@colData <- data_methylation@colData[match(colnames(data_methylation_450k@colData),colnames(data_methylation@colData))]
+data_methylation@colData$platform <- '27k'
+
+illumina_27k_rowdata <-  data_methylation@rowRanges
+illumina_450k_rowdata <-  data_methylation_450k@rowRanges
+rowRanges(data_methylation) <- NULL
+rowRanges(data_methylation_450k) <- NULL
+
+```
+  
+
+```{r}
+data_methylation_complete <- SummarizedExperiment(assays = list( beta_values  = cbind(assay(data_methylation_450k[common_methylations,],1), 
+                                                                                      assay(data_methylation[common_methylations,],1)),
+                                                                 M_values = cbind(assay(data_methylation_450k[common_methylations,],2), 
+                                                                                      assay(data_methylation[common_methylations,],2))),
+                                                  rowData = illumina_450k_rowdata[common_methylations,],
+                                                  colData =  rbind(data_methylation_450k@colData, data_methylation@colData),
+                                                  )
 
 ```
 
 
+```{r}
+
+all_methylation_pca <- run_PCA(assay(data_methylation_complete,'M_values'))
+
+plot_PCA(all_methylation_pca,'M values of all methylation patients', data_methylation_complete@colData$platform, 'platform', is_pca_obj = T)
+
+
+```
+
+```{r}
+plot_PCA(all_methylation_pca,'M values of all methylation patients', data_methylation_complete@colData$paper_BRCA_Subtype_PAM50 ,'subtypes', is_pca_obj = T)
+
+```
+
+```{r}
+plot_3D_PCA(all_methylation_pca$u, data_methylation_complete@colData$paper_BRCA_Subtype_PAM50, is_PCA_obj = T)
+
+```
+
+```{r}
+filtered_transcriptome@colData <- t(remove_NA_rows(t(data_transcriptome@colData)))
+
+filtered_transcriptome_matched_samples <- filtered_transcriptome[, which(filtered_transcriptome@colData$sample__RNAseq %in% intersect(data_methylation_complete@colData$sample, filtered_transcriptome@colData$sample__RNAseq))]
+data_methylation_complete_matched_samples <- data_methylation_complete[, which(data_methylation_complete@colData$sample %in% intersect(data_methylation_complete@colData$sample, filtered_transcriptome@colData$sample__RNAseq))]
+
+```
+
+```{r, fig.width=19, fig.height= 7}
+plot_RLE(assay(data_methylation_complete_matched_samples,'M_values')[, 600:1100], data_methylation_complete_matched_samples@colData$platform[600:1100], ylimit = c(-5,5))
+
+```
+```{r}
 
 
 
-
-
-
-
-
-
-
+```
 
 
 
