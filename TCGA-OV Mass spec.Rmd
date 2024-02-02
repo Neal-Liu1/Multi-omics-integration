@@ -2712,7 +2712,7 @@ p1 <- ggplot(mapping = aes(x=log2(PRPS_confident_subtypes@colData$lib_size),y=NC
         axis.line = element_line(colour = "grey75", linewidth = 1.1),
         panel.grid.major = element_line(color = "grey96"),)
 
-p2 <- ggplot(mapping = aes(x=log2(PRPS_confident_subtypes@colData$Calculated_singscore_purity),y=NCG_pca$V1))+
+p2 <- ggplot(mapping = aes(x= PRPS_confident_subtypes@colData$Calculated_singscore_purity,y=NCG_pca$V1))+
   geom_point(alpha=0.62, color= 'grey30') + # alpha for transparency to see overlap
   labs(y="PC1 of NCGs", 
        x="Purity") +
@@ -2797,6 +2797,8 @@ PRPS_confident_subtypes_raw_counts <- ruvIIIMultipleK(se.obj=PRPS_confident_subt
                     remove.na = 'measurements',
                     save.se.obj = T,
                     verbose = T)
+
+
 ```
 
 
@@ -2817,7 +2819,7 @@ p1 <- ggplot(mapping = aes(x=log2(PRPS_confident_subtypes_raw_counts@colData$log
         axis.line = element_line(colour = "grey75", linewidth = 1.1),
         panel.grid.major = element_line(color = "grey96"),)
 
-p2 <- ggplot(mapping = aes(x=log2(PRPS_confident_subtypes_raw_counts@colData$Calculated_singscore_purity),y=NCG_pca_raw_counts$V1))+
+p2 <- ggplot(mapping = aes(x=PRPS_confident_subtypes_raw_counts@colData$Calculated_singscore_purity,y=NCG_pca_raw_counts$V1))+
   geom_point(alpha=0.62, color= 'grey30') + # alpha for transparency to see overlap
   labs(y="PC1 of NCGs", 
        x="Purity") +
