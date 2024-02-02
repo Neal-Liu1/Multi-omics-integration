@@ -31,6 +31,9 @@ library(singscore)
 
 source('Helper_functions.R')
 
+library(devtools)
+install_github('RMolania/RUVIIIPRPS' , force = T)
+
 ```
 
 
@@ -243,14 +246,162 @@ data_methylation_complete_matched_samples <- data_methylation_complete[, which(d
 ```
 
 ```{r, fig.width=19, fig.height= 7}
-plot_RLE(assay(data_methylation_complete_matched_samples,'M_values')[, 600:1100], data_methylation_complete_matched_samples@colData$platform[600:1100], ylimit = c(-5,5))
+plot_RLE(assay(data_methylation_complete_matched_samples,'M_values')[, 700:1000], data_methylation_complete_matched_samples@colData$platform[700:1000], ylimit = c(-5,5))
 
 ```
 ```{r}
-
+data_methylation_complete_matched_samples@colData$Plate <- substr(data_methylation_complete_matched_samples@colData$barcode, 22,25)
 
 
 ```
+
+```{r, fig.width=19, fig.height= 7}
+plot_RLE((assay(data_methylation_complete_matched_samples,'M_values')[,which(data_methylation_complete_matched_samples@colData$platform == '450k')]), (data_methylation_complete_matched_samples@colData$Plate[which(data_methylation_complete_matched_samples@colData$platform == '450k')]), ylimit = c(-4,4))
+
+```
+
+
+```{r}
+table(data_methylation_complete_matched_samples@colData$Plate)
+table(filtered_transcriptome_matched_samples@colData$BatchId_mda)
+
+data_methylation_complete_matched_samples <- data_methylation_complete_matched_samples[,!duplicated(data_methylation_complete_matched_samples@colData$sample)]
+data_methylation_complete_matched_samples<- data_methylation_complete_matched_samples[,match(filtered_transcriptome_matched_samples@colData$sample__RNAseq, data_methylation_complete_matched_samples@colData$sample)]
+data_methylation_complete_matched_samples@colData$singscore_purity <- filtered_transcriptome_matched_samples@colData$Purity_singscore
+
+```
+
+
+```{r, fig.width= 9}
+
+methylation_normalized <- data_methylation_complete_matched_samples
+methylation_normalized@colData$Plate <- factor(methylation_normalized@colData$Plate)
+methylation_normalized@colData$platform <- factor(methylation_normalized@colData$platform)
+methylation_normalized@colData$subtype <- filtered_transcriptome_matched_samples@colData$subtype_BRCA_Subtype_PAM50__RNAseq
+assay(methylation_normalized,2) <- as.matrix(assay(methylation_normalized,2))
+
+methylation_normalized <- RUVIIIPRPS::supervisedPRPS(methylation_normalized[,which(!is.na(methylation_normalized@colData$subtype))], 'M_values',
+                                                     bio.variable = 'subtype',
+                                                     uv.variables = c('platform','Plate','singscore_purity'), 
+                                                     batch.variable = 'Plate', 
+                                                     min.sample.for.prps = 3,
+                                                     min.sample.per.batch = 3,
+                                                     apply.log = F,
+                                                     pseudo.count = 1,
+                                                     assess.se.obj = F,
+                                                     assess.cor.variables = T,
+                                                     save.se.obj = TRUE,
+                                                     verbose = T)
+
+
+# plotting prps map
+
+prps_map <- as.data.frame(methylation_normalized@colData)[,c('Plate','paper_BRCA_Subtype_PAM50')] %>%
+    dplyr::count(Plate, paper_BRCA_Subtype_PAM50)
+
+prps_map$use <- ifelse(prps_map$n > 2, 'yes','no')
+
+ggplot(prps_map, aes(x = Plate, y = paper_BRCA_Subtype_PAM50)) +
+  geom_count(aes(color = use)) +
+  geom_text(aes(
+    label = n,
+    hjust = 0.5,
+    vjust = 0.5
+  )) +
+  xlab('Batch') +
+  ylab('Confident subtypes') +
+  theme_bw() +
+  theme(axis.line = element_line(colour = 'grey35', size = 1.1),
+    axis.title.x = element_text(size = 18),
+    axis.title.y = element_text(size = 0),
+    axis.text.x = element_text(size = 10,angle = 45,hjust = 1),
+    axis.text.y = element_text(size = 12, angle = 45, hjust = 1),
+    legend.position = 'none',
+    panel.grid.major = element_line(color = "grey95"),
+    aspect.ratio = 1/2)
+
+```
+
+```{r}
+methylation_normalized <- RUVIIIPRPS::supervisedFindNCG(methylation_normalized, 'M_values',
+                                                     bio.variable = 'subtype',
+                                                     uv.variables = c('platform','Plate','singscore_purity'), 
+                                                     no.ncg = 1000,
+                                                     apply.log = F,
+                                                     assess.se.obj = F)
+
+
+```
+
+```{r}
+NCGs <- methylation_normalized@metadata$NCG
+
+pca_NCGs <- run_PCA(assay(methylation_normalized,2)[NCGs, ])
+
+plot_3D_PCA(pca_NCGs$u, methylation_normalized@colData$platform, is_PCA_obj = T)
+
+
+```
+
+```{r}
+plot_3D_PCA(pca_NCGs$u, methylation_normalized@colData$Plate, is_PCA_obj = T)
+
+```
+
+```{r}
+
+ggplot(mapping = aes(x=methylation_normalized@colData$singscore_purity, y=(pca_NCGs$u[,1])))+
+  geom_point(alpha=0.62, color= 'grey30') + # alpha for transparency to see overlap
+  labs(y="PC1 of NCGs", 
+       x="Purity") +
+  theme_minimal()+
+  ggtitle('1st PC of negative control genes vs purity') +
+  theme(panel.border=element_rect(colour = "grey80", fill=NA, size=0.8),
+        aspect.ratio = 1/1.05,
+        axis.line = element_line(colour = "grey75", linewidth = 1.1),
+        panel.grid.major = element_line(color = "grey96"),)
+
+
+```
+
+```{r}
+replicate.data=t(do.call(cbind, methylation_normalized@metadata[['PRPS']][['supervised']]))
+
+methylation_normalized <- RUVIIIPRPS::ruvIIIMultipleK(se.obj = methylation_normalized, 
+                                                      assay.name = 'M_values',
+                                                      apply.log = F,
+                                                      k = 10,
+                                                      ctl= methylation_normalized@metadata[['NCG']],
+                                                      assess.se.obj = F, 
+                                                      replicate.data = replicate.data,
+                                                      save.se.obj = T,
+                                                      remove.na = 'measurements')
+
+
+```
+
+
+```{r}
+methylation_normalized <- RUVIIIPRPS::normalise(se.obj = methylation_normalized,
+                                                         assay.name='M_values',
+                                                         apply.log = F, 
+                                                         k=12, 
+                                                         bio.variable.prps = 'subtype', 
+                                                         uv.variables.prps = c('singscore_purity','Plate','platform'),
+                                                         batch.variable.prps = 'Plate',
+                                                         min.sample.per.batch.prps = 3,
+                                                         norm.assay.name.ncg = 'M_values',
+                                                         bio.variables.ncg = 'subtype',
+                                                         uv.variables.ncg = c('singscore_purity','Plate','platform'),
+                                                         assess.se.obj = F
+                                                         )
+```
+
+
+
+
+
+
 
 
 
