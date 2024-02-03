@@ -32,7 +32,7 @@ library(singscore)
 source('Helper_functions.R')
 
 library(devtools)
-install_github('RMolania/RUVIIIPRPS' , force = T)
+install_github('mtrussart/RUVIIIPRPS' , force = T)
 
 ```
 
@@ -278,30 +278,32 @@ methylation_normalized <- data_methylation_complete_matched_samples
 methylation_normalized@colData$Plate <- factor(methylation_normalized@colData$Plate)
 methylation_normalized@colData$platform <- factor(methylation_normalized@colData$platform)
 methylation_normalized@colData$subtype <- filtered_transcriptome_matched_samples@colData$subtype_BRCA_Subtype_PAM50__RNAseq
-assay(methylation_normalized,2) <- as.matrix(assay(methylation_normalized,2))
+methylation_normalized@colData$subtype[which(methylation_normalized@colData$definition == 'Solid Tissue Normal')] <- 'Normal Tissue'
+methylation_normalized@colData$subtype[which(methylation_normalized@colData$subtype == 'Normal')] <- 'Normal like'
 
-methylation_normalized <- RUVIIIPRPS::supervisedPRPS(methylation_normalized[,which(!is.na(methylation_normalized@colData$subtype))], 'M_values',
+
+methylation_normalized <- RUVIIIPRPS::supervisedPRPS(methylation_normalized[,which(!is.na(methylation_normalized@colData$subtype))],                                                      'M_values',
                                                      bio.variable = 'subtype',
                                                      uv.variables = c('platform','Plate','singscore_purity'), 
                                                      batch.variable = 'Plate', 
-                                                     min.sample.for.prps = 3,
+                                                     min.sample.for.prps = 2,
                                                      min.sample.per.batch = 3,
                                                      apply.log = F,
                                                      pseudo.count = 1,
                                                      assess.se.obj = F,
-                                                     assess.cor.variables = T,
+                                                     assess.cor.variables = F,
                                                      save.se.obj = TRUE,
                                                      verbose = T)
 
 
 # plotting prps map
 
-prps_map <- as.data.frame(methylation_normalized@colData)[,c('Plate','paper_BRCA_Subtype_PAM50')] %>%
-    dplyr::count(Plate, paper_BRCA_Subtype_PAM50)
+prps_map <- as.data.frame(methylation_normalized@colData)[,c('Plate','subtype')] %>%
+    dplyr::count(Plate, subtype)
 
-prps_map$use <- ifelse(prps_map$n > 2, 'yes','no')
+prps_map$use <- ifelse(prps_map$n > 1, 'yes','no')
 
-ggplot(prps_map, aes(x = Plate, y = paper_BRCA_Subtype_PAM50)) +
+ggplot(prps_map, aes(x = Plate, y = subtype)) +
   geom_count(aes(color = use)) +
   geom_text(aes(
     label = n,
@@ -370,7 +372,7 @@ replicate.data=t(do.call(cbind, methylation_normalized@metadata[['PRPS']][['supe
 methylation_normalized <- RUVIIIPRPS::ruvIIIMultipleK(se.obj = methylation_normalized, 
                                                       assay.name = 'M_values',
                                                       apply.log = F,
-                                                      k = 10,
+                                                      k = c(6,10,14),
                                                       ctl= methylation_normalized@metadata[['NCG']],
                                                       assess.se.obj = F, 
                                                       replicate.data = replicate.data,
@@ -381,27 +383,46 @@ methylation_normalized <- RUVIIIPRPS::ruvIIIMultipleK(se.obj = methylation_norma
 ```
 
 
+```{r, fig.width= 12}
+
+normalized_methylation_pcas <- lapply(assays(methylation_normalized)[-1], run_PCA)
+
+p1 <- plot_vector_correlation(normalized_methylation_pcas, c('M values', 'RUV k6', 'RUV k10', 'RUV k14'), methylation_normalized@colData$platform, 'Platform')
+
+p2 <- plot_vector_correlation(normalized_methylation_pcas, c('M values', 'RUV k6', 'RUV k10', 'RUV k14'), methylation_normalized@colData$Plate, 'plate')
+
+p3 <- plot_linear_correlation(normalized_methylation_pcas, c('M values', 'RUV k6', 'RUV k10', 'RUV k14'), methylation_normalized@colData$singscore_purity, 'purity')
+
+gridExtra::grid.arrange(p1,p2, p3, ncol = 2, nrow = 2)
+
+```
+
+```{r,fig.width=19, fig.height= 7}
+
+plot_RLE(assay(methylation_normalized,'RUV_K14_on_M_values')[,1:600], methylation_normalized@colData$Plate[1:600], ylimit = c(-5,5))
+
+
+```
+
+```{r,fig.width=19, fig.height= 7}
+
+plot_RLE(assay(methylation_normalized,'RUV_K14_on_M_values')[,600:1168], methylation_normalized@colData$Plate[600:1168], ylimit = c(-5,5))
+
+
+```
 ```{r}
-methylation_normalized <- RUVIIIPRPS::normalise(se.obj = methylation_normalized,
-                                                         assay.name='M_values',
-                                                         apply.log = F, 
-                                                         k=12, 
-                                                         bio.variable.prps = 'subtype', 
-                                                         uv.variables.prps = c('singscore_purity','Plate','platform'),
-                                                         batch.variable.prps = 'Plate',
-                                                         min.sample.per.batch.prps = 3,
-                                                         norm.assay.name.ncg = 'M_values',
-                                                         bio.variables.ncg = 'subtype',
-                                                         uv.variables.ncg = c('singscore_purity','Plate','platform'),
-                                                         assess.se.obj = F
-                                                         )
+p1 <- plot_PCA(normalized_methylation_pcas[[4]], 'RUV-K14', methylation_normalized@colData$subtype, 'subtypes', is_pca_obj = T)
+p2 <- plot_PCA(normalized_methylation_pcas[[4]], 'RUV-K14', methylation_normalized@colData$platform, 'platform', is_pca_obj = T)
+
+p2
+
 ```
 
 
+```{r}
+plot_3D_PCA(normalized_methylation_pcas[[4]], methylation_normalized@colData$subtype, is_PCA_obj = T)
 
-
-
-
+```
 
 
 
