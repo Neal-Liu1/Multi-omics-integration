@@ -101,8 +101,8 @@ plot_PCA <- function(matrix, dataset_name, labels, label_name, pcs= c(1,2), is_p
 plot_3D_PCA <- function(matrix, label_vector = NULL, title = "3D PCA Plot" , is_PCA_obj = F){
   # Plot an interactive 3D PCA using plotly of the first 3 PCs. 
   
-  if(is_PCA_obj){data = as.data.frame(matrix)}
-  else{as.data.frame(prcomp(matrix))[[2]]}
+  if(is_PCA_obj){data = as.data.frame(matrix$u)}
+  else{data = as.data.frame(run_PCA(matrix, pcs=10)$u)}
   
   plot_ly(data = data, 
           x = ~PC1, y = ~PC2, z = ~PC3, color = label_vector, 
@@ -218,18 +218,19 @@ plot_RLE <- function(matrix, batch_info, ylimit=c(-10,10)){
 
 
 
-plot_linear_correlation <- function(matrix_list, dataset_names, variable_vector, variable_name, num_pcs=10){
+plot_linear_correlation <- function(matrix_list, dataset_names, variable_vector, variable_name, num_pcs=10, is.pca.obj = T){
   # taking a list of matrices, a vector of the names of the omics, a vector of numerical values (in order) of the values you want to compare, and number of PCs, plot the linear correlation R^2 values
 
-  if (length(matrix_list)>30) {stop('Your omics matrices must be a list. Did you accidentally use c() instead of list()?')}
+  if(length(matrix_list)>30) {stop('Your omics matrices must be a list. Did you accidentally use c() instead of list()?')}
   
-  if (is.list(dataset_names)) {stop('Your dataset names cannot be a list. Has to be a vector. use c() instead of list()!')}
+  if(is.list(dataset_names)) {stop('Your dataset names cannot be a list. Has to be a vector. use c() instead of list()!')}
   
-  pcas <- lapply(matrix_list, function(m) {prcomp(t(m), scale = F, center=T)})
+  if(!is.pca.obj){pcas <- lapply(matrix_list, run_PCA(.,pcs = num_pcs))}
+  if(is.pca.obj){pcas <- matrix_list}
   
   r_squared_results <- sapply(pcas, function(matrix, variable, num) {
     sapply(1:num_pcs, function(y) {
-      lm_model <- summary(lm(variable ~ matrix$x[,1:y]))$r.squared})
+      lm_model <- summary(lm(variable ~ matrix$u[,1:y]))$r.squared})
   }, variable = variable_vector, num=num_pcs)
   
   
@@ -258,16 +259,19 @@ plot_linear_correlation <- function(matrix_list, dataset_names, variable_vector,
   
 
 
-plot_vector_correlation <- function(pca_list, dataset_names, variable_vector, variable_name, num_pcs=10){
+plot_vector_correlation <- function(data_list, dataset_names, variable_vector, variable_name, num_pcs=10, is.pca.obj = T){
   # taking a list of pca objects, a vector of categorical values (in order) of the values you want to compare, and number of PCs, plot the correlation R^2 values
   
-  if (length(pca_list)>30) {stop('Your pcas must be a list. Did you accidentally use c() instead of list()?')}
+  if (length(data_list)>30) {stop('Your data must be a list. Did you accidentally use c() instead of list()?')}
   
   if (is.list(dataset_names)) {stop('Your dataset names cannot be a list. Has to be a vector. use c() instead of list()!')}
   
+  if(!is.pca.obj){pca_list <- lapply(data_list, run_PCA(.,pcs = num_pcs))}
+  if(is.pca.obj){pca_list <- data_list}
+  
   dummies <- fastDummies::dummy_cols(variable_vector)[,-1]
   
-  cancor_scores <- sapply(pca_list, function(m) {lapply(1:num_pcs, function(y) {cca <- stats::cancor(x= m$x[,1:y, drop=F], 
+  cancor_scores <- sapply(pca_list, function(m) {lapply(1:num_pcs, function(y) {cca <- stats::cancor(x= m$u[,1:y, drop=F], 
                       y= dummies)  
   1 - prod(1 - cca$cor^2)})
   })
