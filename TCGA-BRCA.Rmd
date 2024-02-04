@@ -424,5 +424,190 @@ plot_3D_PCA(normalized_methylation_pcas[[4]], methylation_normalized@colData$sub
 
 ```
 
+Normalizing transcriptome raw counts, removing effects of: purity, library size and batch
+
+
+```{r,fig.width= 9}
+
+transcriptome_normalized <- filtered_transcriptome_matched_samples
+transcriptome_normalized@colData$subtype <- transcriptome_normalized@colData$subtype_BRCA_Subtype_PAM50__RNAseq
+transcriptome_normalized@colData$subtype[which(transcriptome_normalized@colData$definition__RNAseq == 'Solid Tissue Normal')] <- 'Normal Tissue'
+transcriptome_normalized@colData$subtype[which(transcriptome_normalized@colData$subtype == 'Normal')] <- 'Normal like'
+transcriptome_normalized@colData$batch <-transcriptome_normalized@colData$BatchId_mda
+transcriptome_normalized@colData$log2_lib_size <- log2(apply(assay(transcriptome_normalized,'HTseq_counts'), 2, sum)+1)
+
+
+transcriptome_normalized <- RUVIIIPRPS::supervisedPRPS(transcriptome_normalized[,which(!is.na(transcriptome_normalized@colData$subtype))],                                                      'HTseq_counts',
+                                                     bio.variable = 'subtype',
+                                                     uv.variables = c('log2_lib_size','Purity_singscore','batch'), 
+                                                     batch.variable = 'batch', 
+                                                     min.sample.for.prps = 2,
+                                                     min.sample.per.batch = 3,
+                                                     apply.log = T,
+                                                     pseudo.count = 1,
+                                                     assess.se.obj = F,
+                                                     assess.cor.variables = F,
+                                                     save.se.obj = TRUE,
+                                                     verbose = T)
+
+
+# plotting prps map
+
+prps_map <- as.data.frame(transcriptome_normalized@colData)[,c('batch','subtype')] %>%
+    dplyr::count(batch, subtype)
+
+prps_map$use <- ifelse(prps_map$n > 1, 'yes','no')
+
+ggplot(prps_map, aes(x = batch, y = subtype)) +
+  geom_count(aes(color = use)) +
+  geom_text(aes(
+    label = n,
+    hjust = 0.5,
+    vjust = 0.5
+  )) +
+  xlab('Batch') +
+  ylab('Confident subtypes') +
+  theme_bw() +
+  theme(axis.line = element_line(colour = 'grey35', size = 1.1),
+    axis.title.x = element_text(size = 18),
+    axis.title.y = element_text(size = 0),
+    axis.text.x = element_text(size = 10,angle = 45,hjust = 1),
+    axis.text.y = element_text(size = 12, angle = 45, hjust = 1),
+    legend.position = 'none',
+    panel.grid.major = element_line(color = "grey95"),
+    aspect.ratio = 1/2)
+
+
+```
+
+
+```{r, fig.width=8}
+transcriptome_normalized1 <- RUVIIIPRPS::supervisedFindNCG(transcriptome_normalized[,-which(transcriptome_normalized@colData$batch %in% names(table(transcriptome_normalized@colData$batch)[table(transcriptome_normalized@colData$batch) <= 3]))], 'HTseq_counts',
+                                                     bio.variable = 'subtype',
+                                                     uv.variables = c('log2_lib_size','Purity_singscore','batch'), 
+                                                     no.ncg = 1000,
+                                                     apply.log = T,
+                                                     assess.se.obj = F,
+                                                     )
+
+
+NCGs <- transcriptome_normalized1@metadata$NCG
+pca_NCGs <- run_PCA(assay(transcriptome_normalized1,1)[NCGs, ])
+
+p1 <- ggplot(mapping = aes(x=transcriptome_normalized1@colData$Purity_singscore, y=(pca_NCGs$u[,1])))+
+  geom_point(alpha=0.62, color= 'grey30') + # alpha for transparency to see overlap
+  labs(y="PC1 of NCGs", 
+       x="Purity") +
+  theme_minimal()+
+  ggtitle('1st PC of negative control genes vs purity') +
+  theme(panel.border=element_rect(colour = "grey80", fill=NA, size=0.8),
+        aspect.ratio = 1/1.05,
+        axis.line = element_line(colour = "grey75", linewidth = 1.1),
+        panel.grid.major = element_line(color = "grey96"),)
+
+p2 <- ggplot(mapping = aes(x=transcriptome_normalized1@colData$log2_lib_size, y=(pca_NCGs$u[,1])))+
+  geom_point(alpha=0.62, color= 'grey30') + # alpha for transparency to see overlap
+  labs(y="PC1 of NCGs", 
+       x="log2 libsize") +
+  theme_minimal()+
+  ggtitle('1st PC of negative control genes vs libsize') +
+  theme(panel.border=element_rect(colour = "grey80", fill=NA, size=0.8),
+        aspect.ratio = 1/1.05,
+        axis.line = element_line(colour = "grey75", linewidth = 1.1),
+        panel.grid.major = element_line(color = "grey96"),)
+
+
+gridExtra::grid.arrange(p1,p2, ncol = 2)
+
+```
+
+```{r}
+plot_3D_PCA(pca_NCGs, transcriptome_normalized1@colData$batch, is_PCA_obj = T)
+
+```
+
+
+```{r}
+replicate.data=t(do.call(cbind, transcriptome_normalized1@metadata[['PRPS']][['supervised']]))
+
+transcriptome_normalized <- RUVIIIPRPS::ruvIIIMultipleK(se.obj = transcriptome_normalized, 
+                                                      assay.name = 'HTseq_counts',
+                                                      apply.log = T,
+                                                      k = c(4,6,8,10),
+                                                      ctl= transcriptome_normalized1@metadata[['NCG']],
+                                                      assess.se.obj = F, 
+                                                      replicate.data = replicate.data,
+                                                      save.se.obj = T,
+                                                      remove.na = 'measurements')
+
+
+```
+
+```{r, fig.width= 13}
+
+normalized_transcriptome_pcas <- lapply(assays(transcriptome_normalized), run_PCA)
+
+p1 <- plot_vector_correlation(normalized_transcriptome_pcas, names(assays(transcriptome_normalized)), transcriptome_normalized@colData$batch, 'batch')
+
+p2 <- plot_linear_correlation(normalized_transcriptome_pcas, names(assays(transcriptome_normalized)), transcriptome_normalized@colData$Purity_singscore, 'purity')
+
+p3 <- plot_vector_correlation(normalized_transcriptome_pcas, names(assays(transcriptome_normalized)), transcriptome_normalized@colData$subtype, 'subtypes')
+
+p4 <- plot_linear_correlation(normalized_transcriptome_pcas, names(assays(transcriptome_normalized)), transcriptome_normalized@colData$log2_lib_size, 'libsize')
+
+gridExtra::grid.arrange(p1,p2, p3, p4, ncol = 2, nrow = 2)
+
+
+```
+
+```{r}
+
+plot_3D_PCA(normalized_transcriptome_pcas[['RUV_K10_on_HTseq_counts']], transcriptome_normalized@colData$subtype, is_PCA_obj = T)
+
+
+```
+
+```{r, fig.width=12}
+p1 <- plot_PCA(normalized_transcriptome_pcas[['RUV_K10_on_HTseq_counts']],'RUV K10', transcriptome_normalized@colData$subtype, 'subtypes',is_pca_obj = T)
+
+p2 <- plot_PCA(normalized_transcriptome_pcas[['RUV_K10_on_HTseq_counts']],'RUV K10', transcriptome_normalized@colData$subtype, 'subtypes',is_pca_obj = T, pcs = c(1,3))
+
+gridExtra::grid.arrange(p1,p2, ncol=2)
+
+```
+
+```{r, fig.width= 18, fig.height= 7}
+plot_RLE(log2(assay(transcriptome_normalized,'HTseq_counts')[,1:600]+1), transcriptome_normalized@colData$batch[1:600], ylimit = c(-4,4))
+
+
+```
+
+```{r, fig.width= 18, fig.height= 7}
+plot_RLE(log2(assay(transcriptome_normalized,'HTseq_counts')[,600:1168]+1), transcriptome_normalized@colData$batch[600:1168], ylimit = c(-4,4))
+
+
+```
+
+```{r, fig.width= 18, fig.height= 7}
+plot_RLE(assay(transcriptome_normalized,'RUV_K10_on_HTseq_counts')[,1:600], transcriptome_normalized@colData$batch[1:600], ylimit = c(-4,4))
+
+
+```
+
+```{r, fig.width= 18, fig.height= 7}
+plot_RLE(assay(transcriptome_normalized,'RUV_K10_on_HTseq_counts')[,600:1168], transcriptome_normalized@colData$batch[600:1168], ylimit = c(-4,4))
+
+
+```
+
+```{r}
+saveRDS(list(transcriptome_normalized, methylation_normalized), file = 'Data/TCGA_BRCA_Normalized_transcriptome&methylation.rds')
+
+
+```
+
+
+
+
 
 
