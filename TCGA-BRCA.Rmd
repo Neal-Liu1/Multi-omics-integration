@@ -603,8 +603,70 @@ plot_RLE(assay(transcriptome_normalized,'RUV_K10_on_HTseq_counts')[,600:1168], t
 ```{r}
 saveRDS(list(transcriptome_normalized, methylation_normalized), file = 'Data/TCGA_BRCA_Normalized_transcriptome&methylation.rds')
 
+```
+
+
+Explore the CPTAC proteome data
+
+```{r}
+
+TCGA_Breast_BI_Proteome_itraq1 <- as.data.frame(TCGA_Breast_BI_Proteome_itraq[,-1])
+rownames(TCGA_Breast_BI_Proteome_itraq1) <- unlist(TCGA_Breast_BI_Proteome_itraq[,1])
+
+data_proteome <- SummarizedExperiment(assays = list(log_ratios = TCGA_Breast_BI_Proteome_itraq1[-(1:3),-(223:228)]),
+                                      colData = list(t(TCGA_Breast_BI_Proteome_itraq1[(1:3),-(223:228)])),
+                                      rowData = list(TCGA_Breast_BI_Proteome_itraq1[-(1:3),(223:228)]))
+
+
+# add extra metadata downloaded from the study files on PDC
+extra_coldata <- as.data.frame(CPTAC_TCGA_BreastCancer_select_clinical_data_r1[-c(1:5),])
+colnames(extra_coldata) <- CPTAC_TCGA_BreastCancer_select_clinical_data_r1[5,]
+rownames(extra_coldata) <- substr(extra_coldata$`Complete TCGA ID`, 6,12)
+extra_coldata1 <- extra_coldata[match(substr(colnames(data_proteome),1,7), substr(extra_coldata$`Complete TCGA ID`, 6,12)),]
+rownames(extra_coldata1) <- colnames(data_proteome)
+data_proteome@colData <- cbind(data_proteome@colData, extra_coldata1)
+data_proteome <- data_proteome[, -which(is.na(data_proteome@colData$`PAM50 mRNA`))]
+
+# delete lowly expressed proteins
+na_fraction <- apply(assay(data_proteome), 1, function(x) {sum(is.na(x))/length(x)})
+data_proteome <- data_proteome[which(na_fraction <= 0.3),]
+assay(data_proteome) <- replace_all_NAs_with_row_means(assay(data_proteome))
+
+# split shared & unshared into 2 assays
+unshared_proteome <- data_proteome[,grepl('Unshared', colnames(data_proteome))]
+data_proteome <- data_proteome[,!grepl('Unshared', colnames(data_proteome))]
+colnames(unshared_proteome) <- colnames(data_proteome)
+assay(data_proteome, 'unshared_log_ratio') <- assay(unshared_proteome)
+assayNames(data_proteome)[1] <- 'shared_log_ratio'
+
+saveRDS(data_proteome, file = 'Data/TCGA-BRCA CPTAC proteome.rds')
+
 
 ```
+
+
+```{r}
+
+plot_3D_PCA(assay(data_proteome,1), data_proteome@colData$`PAM50 mRNA`, is_PCA_obj = F)
+
+
+```
+
+```{r}
+plot_3D_PCA(assay(data_proteome,2), data_proteome@colData$`PAM50 mRNA`, is_PCA_obj = F)
+
+```
+
+
+```{r}
+
+
+
+
+```
+
+
+
 
 
 
