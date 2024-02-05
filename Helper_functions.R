@@ -225,7 +225,7 @@ plot_linear_correlation <- function(matrix_list, dataset_names, variable_vector,
   
   if(is.list(dataset_names)) {stop('Your dataset names cannot be a list. Has to be a vector. use c() instead of list()!')}
   
-  if(!is.pca.obj){pcas <- lapply(matrix_list, run_PCA(.,pcs = num_pcs))}
+  if(!is.pca.obj){pcas <- lapply(matrix_list, function(x) {run_PCA(x, pcs = num_pcs)})}
   if(is.pca.obj){pcas <- matrix_list}
   
   r_squared_results <- sapply(pcas, function(matrix, variable, num) {
@@ -266,7 +266,7 @@ plot_vector_correlation <- function(data_list, dataset_names, variable_vector, v
   
   if (is.list(dataset_names)) {stop('Your dataset names cannot be a list. Has to be a vector. use c() instead of list()!')}
   
-  if(!is.pca.obj){pca_list <- lapply(data_list, run_PCA(.,pcs = num_pcs))}
+  if(!is.pca.obj){pca_list <- lapply(data_list, function(x) {run_PCA(x,pcs = num_pcs)})}
   if(is.pca.obj){pca_list <- data_list}
   
   dummies <- fastDummies::dummy_cols(variable_vector)[,-1]
