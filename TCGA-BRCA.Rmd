@@ -610,6 +610,8 @@ Explore the CPTAC proteome data
 
 ```{r}
 
+
+
 TCGA_Breast_BI_Proteome_itraq1 <- as.data.frame(TCGA_Breast_BI_Proteome_itraq[,-1])
 rownames(TCGA_Breast_BI_Proteome_itraq1) <- unlist(TCGA_Breast_BI_Proteome_itraq[,1])
 
@@ -658,17 +660,19 @@ plot_3D_PCA(assay(data_proteome,2), data_proteome@colData$`PAM50 mRNA`, is_PCA_o
 
 
 ```{r, fig.width= 13, fig.height= 8}
-transcriptome_normalized@colData$Purity_singscore[match(substr(transcriptome_normalized@colData$sample__RNAseq, 1,12),data_proteome@colData$`Complete TCGA ID`)]
 
+# add purity data from rnaseq
+transcriptome_normalized@colData$Purity_singscore[match(substr(transcriptome_normalized@colData$sample__RNAseq, 1,12),data_proteome@colData$`Complete TCGA ID`)]
 data_proteome@colData$singscore_purity_rna <- transcriptome_normalized@colData$Purity_singscore[match(data_proteome@colData$`Complete TCGA ID`, substr(transcriptome_normalized@colData$sample__RNAseq, 1,12))]
 data_proteome@colData$singscore_purity_rna[is.na(data_proteome@colData$singscore_purity_rna)] <- mean(data_proteome@colData$singscore_purity_rna, na.rm = TRUE)
 
-p1 <- plot_linear_correlation(assays(data_proteome), c('shared log ratio','unshared log ratio'), data_proteome@colData$singscore_purity_rna, 'purity (rnaseq)', is.pca.obj = F)
-p2 <- plot_vector_correlation(assays(data_proteome), c('shared log ratio','unshared log ratio'), data_proteome@colData$`PAM50 mRNA`, 'pam50 subtype', is.pca.obj = F)
-p3 <- plot_linear_correlation(assays(data_proteome), c('shared log ratio','unshared log ratio'), data_proteome@colData$Median, 'log expression median', is.pca.obj = F)
 
-
-gridExtra::grid.arrange(p1,p2,p3, ncol=2, nrow=2)
+# add batch data
+proteome_batch_data <-tidyr::pivot_longer(as.data.frame(t(apply(CPTAC_TCGA_Breast_Cancer_iTRAQ_Sample_Mapping, 1, function(x) {substr(x[3:5],6,16)}))[-(37:41),]), cols = everything())
+proteome_batch_data$batch <- rep(1:36, each = 3)
+proteome_batch_data <- proteome_batch_data[match(substr(data_proteome@colData@rownames,1,11) , proteome_batch_data$value),]
+proteome_batch_data$batch[which(is.na(proteome_batch_data$batch))] <- 33
+data_proteome@colData$batch <- proteome_batch_data$batch
 
 ```
 
@@ -678,6 +682,49 @@ p1 <- plot_PCA(assay(data_proteome,2),'unshared proteome log ratio', data_proteo
 p2 <- plot_PCA(assay(data_proteome,2),'unshared proteome log ratio', data_proteome@colData$`PAM50 mRNA`, 'pam50 (RNAseq)', is_pca_obj = F, pcs=c(1,3))
 
 gridExtra::grid.arrange(p1,p2, ncol=2)
+
+```
+
+```{r, fig.width = 12, fig.height= 6}
+plot_RLE(assay(data_proteome,1), data_proteome@colData$batch, ylim = c(-4,4))
+
+```
+
+```{r, fig.width = 12, fig.height= 6}
+plot_RLE(sweep(assay(data_proteome,1), 2, data_proteome@colData$Median, FUN = '+'), data_proteome@colData$batch, ylim = c(-4,4))
+
+
+```
+
+```{r, fig.width= 13, fig.height= 8}
+
+assay(data_proteome, 'raw_shared_log_ratios') <- sweep(assay(data_proteome,1), 2, data_proteome@colData$Median, FUN = '+')
+assay(data_proteome, 'raw_unshared_log_ratios') <- sweep(assay(data_proteome,2), 2, unshared_proteome@colData$Median, FUN = '+')
+
+p1 <- plot_linear_correlation(assays(data_proteome), c('shared log ratio','unshared log ratio','raw_shared_log_ratios','raw_unshared_log_ratios'), data_proteome@colData$singscore_purity_rna, 'purity (rnaseq)', is.pca.obj = F)
+p2 <- plot_vector_correlation(assays(data_proteome), c('shared log ratio','unshared log ratio','raw_shared_log_ratios','raw_unshared_log_ratios'), data_proteome@colData$`PAM50 mRNA`, 'pam50 subtype', is.pca.obj = F)
+p3 <- plot_linear_correlation(assays(data_proteome), c('shared log ratio','unshared log ratio','raw_shared_log_ratios','raw_unshared_log_ratios'), data_proteome@colData$Median, 'log expression median', is.pca.obj = F)
+p4 <- plot_vector_correlation(assays(data_proteome), c('shared log ratio','unshared log ratio','raw_shared_log_ratios','raw_unshared_log_ratios'), data_proteome@colData$batch, 'batch', is.pca.obj = F)
+
+gridExtra::grid.arrange(p1,p2,p3,p4, ncol=2, nrow=2)
+
+```
+Since each batch is only 3 samples, we might try combining batches with similar average PC scores for the first 10 PCs
+
+```{r}
+
+proteome_pca_scores <- as.data.frame(run_PCA(assay(data_proteome,'raw_unshared_log_ratios'))$u)
+proteome_pca_scores$batch <- data_proteome@colData$batch
+avg_pc_scores <- aggregate(. ~ batch, data= proteome_pca_scores, FUN = mean)
+
+plot_ly(data = avg_pc_scores[,-1], 
+          x = ~PC1, y = ~PC2, z = ~PC3, 
+          type = 'scatter3d', mode = 'markers',
+          marker = list(size = 4, opacity = 0.8)) %>%
+    layout(title = title,
+           scene = list(xaxis = list(title = 'PC1'),
+                        yaxis = list(title = 'PC2'),
+                        zaxis = list(title = 'PC3')))
 
 ```
 
