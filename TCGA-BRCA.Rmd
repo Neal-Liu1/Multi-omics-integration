@@ -709,6 +709,7 @@ p4 <- plot_vector_correlation(assays(data_proteome), c('shared log ratio','unsha
 gridExtra::grid.arrange(p1,p2,p3,p4, ncol=2, nrow=2)
 
 ```
+
 Since each batch is only 3 samples, we might try combining batches with similar average PC scores for the first 10 PCs
 
 ```{r}
@@ -716,9 +717,16 @@ Since each batch is only 3 samples, we might try combining batches with similar 
 proteome_pca_scores <- as.data.frame(run_PCA(assay(data_proteome,'raw_unshared_log_ratios'))$u)
 proteome_pca_scores$batch <- data_proteome@colData$batch
 avg_pc_scores <- aggregate(. ~ batch, data= proteome_pca_scores, FUN = mean)
+library(dynamicTreeCut)
+distances <- dist(x=avg_pc_scores[,-1])
+hc <- hclust(distances)
+# Use dynamic cut
+dynamic_clusters <- cutreeDynamic(dendro=hc,minClusterSize=3)
+avg_pc_scores$combined_batch <- dynamic_clusters
 
-plot_ly(data = avg_pc_scores[,-1], 
-          x = ~PC1, y = ~PC2, z = ~PC3, 
+
+plot_ly(data = avg_pc_scores[,-c(1,12)], 
+          x = ~PC1, y = ~PC2, z = ~PC3, color = avg_pc_scores$combined_batch,
           type = 'scatter3d', mode = 'markers',
           marker = list(size = 4, opacity = 0.8)) %>%
     layout(title = title,
@@ -726,6 +734,61 @@ plot_ly(data = avg_pc_scores[,-1],
                         yaxis = list(title = 'PC2'),
                         zaxis = list(title = 'PC3')))
 
+
+```
+
+
+```{r}
+
+batch_mapping <- setNames(avg_pc_scores$combined_batch, avg_pc_scores$batch)
+
+data_proteome@colData$combined_batch <- factor(as.vector(batch_mapping[as.character(data_proteome@colData$batch)]))
+data_proteome@colData$subtypes <- factor(data_proteome@colData$`PAM50 mRNA`)
+
+plot_vector_correlation(assays(data_proteome), names(assays(data_proteome)), data_proteome$combined_batch, 'combined batch', is.pca.obj = F)
+
+
+```
+
+```{r, fig.width= 13, fig.height= 8}
+
+proteome_normalized <- RUVIIIPRPS::normalise(data_proteome, 'raw_unshared_log_ratios', 
+                                             apply.log = F,
+                                             k= c(4,8,12) ,
+                                             bio.variable.prps = 'subtypes',
+                                             uv.variables.prps = c('Median','combined_batch', 'singscore_purity_rna'),
+                                             batch.variable.prps = 'combined_batch',
+                                             norm.assay.name.ncg = 'raw_unshared_log_ratios',
+                                             bio.variables.ncg = 'subtypes',
+                                             uv.variables.ncg = c('Median','combined_batch','singscore_purity_rna'),
+                                             assess.cor.variables.prps = F,
+                                             assess.se.obj = F,
+                                             min.sample.for.prps = 2,
+                                             min.sample.per.batch.prps = 3)
+
+normalized_proteome_pcas <- lapply(assays(proteome_normalized), run_PCA)
+
+p1 <- plot_linear_correlation(normalized_proteome_pcas, names(assays(proteome_normalized)), proteome_normalized@colData$singscore_purity_rna, 'purity (rnaseq)', is.pca.obj = T)
+p2 <- plot_vector_correlation(normalized_proteome_pcas, names(assays(proteome_normalized)), proteome_normalized@colData$subtypes, 'pam50 subtype', is.pca.obj = T)
+p3 <- plot_linear_correlation(normalized_proteome_pcas, names(assays(proteome_normalized)), proteome_normalized@colData$Median, 'median', is.pca.obj = T)
+p4 <- plot_vector_correlation(normalized_proteome_pcas, names(assays(proteome_normalized)), proteome_normalized@colData$combined_batch, 'combined batch', is.pca.obj = T)
+
+gridExtra::grid.arrange(p1,p2,p3,p4, ncol=2, nrow=2)
+
+
+```
+
+```{r}
+plot_count_map(proteome_normalized@colData$combined_batch, proteome_normalized@colData$subtypes, 1)
+
+```
+
+```{r}
+plot_PCA(assay(proteome_normalized, 'raw_unshared_log_ratios'),'raw unshared proteome', proteome_normalized@colData$Median, 'medians', is_pca_obj = F, is_continuous = T)
+```
+
+```{r}
+plot_PCA(assay(proteome_normalized, 'RUV_K8_on_raw_unshared_log_ratios'),'raw unshared proteome', proteome_normalized@colData$subtypes, 'medians', is_pca_obj = F, is_continuous = F)
 ```
 
 
