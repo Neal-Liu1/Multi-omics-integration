@@ -36,7 +36,7 @@ run_PCA <- function(matrix, pcs= 10){
 
 
 
-plot_PCA <- function(matrix, dataset_name, labels, label_name, pcs= c(1,2), is_pca_obj= F){
+plot_PCA <- function(matrix, dataset_name, labels, label_name, pcs= c(1,2), is_pca_obj= F, is_continuous_label = F){
   # plots a PCA of the data coloured by labels
   
   if(is_pca_obj){pca_data <- matrix}
@@ -56,7 +56,25 @@ plot_PCA <- function(matrix, dataset_name, labels, label_name, pcs= c(1,2), is_p
   xlab <- paste0(first_pc,' (',percentage[pcs[1]],'% variance)')
   ylab <- paste0(second_pc,' (',percentage[pcs[2]],'% variance)')
   
+  if(is_continuous_label){
+    p <- ggplot(data, mapping= aes(x = !!first_pc, y = !!second_pc, fill= label)) +
+      geom_point(aes(color =label), alpha=0.8 , shape=21) +
+      scale_fill_viridis(name = label_name) +
+      scale_color_viridis(name = label_name) +
+      labs(title = paste0("PCA of ",dataset_name," grouped by ",label_name), x = xlab, y = ylab) +
+      scale_x_continuous(breaks = scales::pretty_breaks(n = 5)) +
+      scale_y_continuous(breaks = scales::pretty_breaks(n = 5)) +
+      theme_minimal() +
+      theme(legend.background = element_blank(), 
+            aspect.ratio = 1, 
+            legend.key = element_blank(),
+            legend.position = "right",
+            panel.background = element_blank(), 
+            axis.line = element_line(colour = "grey43",linewidth = 1.1, lineend='round'),
+            panel.grid.major = element_line(color = "grey96"))
+  }
   
+  if(!is_continuous_label){
   p <- ggplot(data, mapping= aes(x = !!first_pc, y = !!second_pc, fill= factor(label))) +
     geom_point(aes(fill=label), color = 'grey55', alpha=0.72 , shape=21) +
     scale_fill_discrete(name=label_name) +
@@ -71,9 +89,10 @@ plot_PCA <- function(matrix, dataset_name, labels, label_name, pcs= c(1,2), is_p
           panel.background = element_blank(), 
           axis.line = element_line(colour = "grey43",linewidth = 1.1, lineend='round'),
           panel.grid.major = element_line(color = "grey96"))
-  
+  }
   p <- p + theme(legend.position = "right")
   
+  if(!is_continuous_label){
   xdens <- axis_canvas(p, axis = "x")+
     geom_density(data, mapping = aes(x = !!first_pc, fill = labels), color= 'grey45', alpha = 0.50, size = 0.2) +
     theme(legend.position = "none")
@@ -82,6 +101,18 @@ plot_PCA <- function(matrix, dataset_name, labels, label_name, pcs= c(1,2), is_p
     geom_density(data, mapping = aes(x = !!second_pc, fill = labels), color= 'grey45', alpha = 0.50, size = 0.2) +
     theme(legend.position = "none")+
     coord_flip()
+  }
+  
+  if(is_continuous_label){
+    xdens <- axis_canvas(p, axis = "x")+
+      geom_density(data, mapping = aes(x = !!first_pc), fill= '#47c16eff', color= 'grey45', alpha = 0.60, size = 0.2) +
+      theme(legend.position = "none")
+    
+    ydens <- axis_canvas(p, axis = "y", coord_flip = TRUE) +
+      geom_density(data, mapping = aes(x = !!second_pc), fill= '#47c16eff', color= 'grey45', alpha = 0.60, size = 0.2) +
+      theme(legend.position = "none")+
+      coord_flip()
+  }
   
   p1 <- insert_xaxis_grob(p, xdens, grid::unit(.2, "null"), position = "top")
   p2 <- insert_yaxis_grob(p1, ydens, grid::unit(.2, "null"), position = "right")
@@ -463,7 +494,7 @@ kruskal_wallis_test <- function(matrix, variable, is.log=T, n.cores=8, pval_adj_
 
 
 ScheirerRayHare_test <- function(matrix, variable_1, variable_2, is.log=T, n.cores=8, pval_adj_method = 'BH', sort_by = NULL){
-  # Non-parametric version of the two-way ANOVA. 
+  # Non-parametric version of the two-way ANOVA. requires the rcompanion package.
   
   
   
@@ -550,6 +581,20 @@ plot_GO_enrichment <- function(gene_name_vector, gene_id_type = 'ENSEMBL', ontol
                       label_format = 100)
   
 }
+
+
+
+combine_batches_by_avg_pc_score <- function(matrix, batch_vector, min_cluster_size = 2){
+  # combines batches by calculating each batch's average PC scores (first 10 PCs) and clustering. 
+  # requires the dynamicTreeCut package.
+  
+  
+  
+  
+}
+
+
+
 
 
 
