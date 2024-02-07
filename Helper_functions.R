@@ -36,7 +36,7 @@ run_PCA <- function(matrix, pcs= 10){
 
 
 
-plot_PCA <- function(matrix, dataset_name, labels, label_name, pcs= c(1,2), is_pca_obj= F, is_continuous_label = F){
+plot_PCA <- function(matrix, dataset_name, labels, label_name, pcs= c(1,2), is_pca_obj= F, is_continuous = F){
   # plots a PCA of the data coloured by labels
   
   if(is_pca_obj){pca_data <- matrix}
@@ -56,7 +56,7 @@ plot_PCA <- function(matrix, dataset_name, labels, label_name, pcs= c(1,2), is_p
   xlab <- paste0(first_pc,' (',percentage[pcs[1]],'% variance)')
   ylab <- paste0(second_pc,' (',percentage[pcs[2]],'% variance)')
   
-  if(is_continuous_label){
+  if(is_continuous){
     p <- ggplot(data, mapping= aes(x = !!first_pc, y = !!second_pc, fill= label)) +
       geom_point(aes(color =label), alpha=0.8 , shape=21) +
       scale_fill_viridis(name = label_name) +
@@ -74,7 +74,7 @@ plot_PCA <- function(matrix, dataset_name, labels, label_name, pcs= c(1,2), is_p
             panel.grid.major = element_line(color = "grey96"))
   }
   
-  if(!is_continuous_label){
+  if(!is_continuous){
   p <- ggplot(data, mapping= aes(x = !!first_pc, y = !!second_pc, fill= factor(label))) +
     geom_point(aes(fill=label), color = 'grey55', alpha=0.72 , shape=21) +
     scale_fill_discrete(name=label_name) +
@@ -92,7 +92,7 @@ plot_PCA <- function(matrix, dataset_name, labels, label_name, pcs= c(1,2), is_p
   }
   p <- p + theme(legend.position = "right")
   
-  if(!is_continuous_label){
+  if(!is_continuous){
   xdens <- axis_canvas(p, axis = "x")+
     geom_density(data, mapping = aes(x = !!first_pc, fill = labels), color= 'grey45', alpha = 0.50, size = 0.2) +
     theme(legend.position = "none")
@@ -103,13 +103,22 @@ plot_PCA <- function(matrix, dataset_name, labels, label_name, pcs= c(1,2), is_p
     coord_flip()
   }
   
-  if(is_continuous_label){
+  if(is_continuous){
+    min <- min(labels)
+    max <- max(labels)
+    weights <- (labels - min) #/(max- min)
     xdens <- axis_canvas(p, axis = "x")+
-      geom_density(data, mapping = aes(x = !!first_pc), fill= '#47c16eff', color= 'grey45', alpha = 0.60, size = 0.2) +
+      geom_density(data, mapping = aes(x = !!first_pc), fill= '#35b779ff', 
+                   color= 'grey45', alpha = 0.45, size = 0.2) +
+      geom_density(data, mapping = aes(x = !!first_pc, weight = weights), fill= '#35b54a', 
+                   color= 'grey45', alpha = 0.45, size = 0.2, bw = "nrd0") +
       theme(legend.position = "none")
     
     ydens <- axis_canvas(p, axis = "y", coord_flip = TRUE) +
-      geom_density(data, mapping = aes(x = !!second_pc), fill= '#47c16eff', color= 'grey45', alpha = 0.60, size = 0.2) +
+      geom_density(data, mapping = aes(x = !!second_pc), fill= '#35b779ff', 
+                   color= 'grey45', alpha = 0.45, size = 0.2) +
+      geom_density(data, mapping = aes(x = !!second_pc, weight = weights), fill= '#35b54a', 
+                   color= 'grey45', alpha = 0.45, size = 0.2, bw = "nrd0") +
       theme(legend.position = "none")+
       coord_flip()
   }
@@ -439,8 +448,8 @@ ANOVA_2way <- function(matrix, variable_1, variable_2, is.log=T, n.cores=8, pval
 
 
 wilcoxon_test <- function(matrix, variable, is.log=T, n.cores = 8){
-  # 
-  # 
+  # Taking a matrix of data and a vector of categorical variables, do wilcox test and calculate P values & adjusted Pvalues for each feature.
+  # Note that if you put is.log=False, we'll transform it first and then do the ANOVA.
   
   if (!is.matrix(matrix)){stop('Inevitable in retrospect. Please uninstall R and quit bioinformatics.')}#paste0("We detect your data is a '",type(matrix),"' not a matrix. Please double check"))}
   if(is.log){expr.data <- matrix}
@@ -449,7 +458,6 @@ wilcoxon_test <- function(matrix, variable, is.log=T, n.cores = 8){
   results <- data.frame(genes = row.names(expr.data),
                         Pvalue = unlist(pval),
                         Adj.pvalue = p.adjust(p = unlist(pval), method = 'BH'))
-  
   
   return(results)
 }
@@ -552,12 +560,40 @@ basic_count_normalization <- function(matrix, type='', log.transform = F){
 
 
 
-plot_count_map <- function(matrix, count_by){
+plot_count_map <- function(variable1, variable2, color_threshold = NULL){
   #
   #
   
+  map <- data.frame(V1 = variable1, V2 = variable2) %>%
+    dplyr::count(V1, V2)
   
-  
+  if(!is.null(color_threshold)){
+  map$use <- ifelse(map$n > color_threshold, 'yes','no')
+  return(
+  ggplot(data = map, aes(x = V1, y = V2)) +
+    geom_count(aes(color = use)) +
+    geom_text(aes(label = n, hjust = 0.5, vjust = 0.5)) +
+    theme_bw() +
+    theme(axis.line = element_line(colour = 'grey35', size = 1.1),
+          axis.title.x = element_text(size = 0),
+          axis.title.y = element_text(size = 0),
+          axis.text.x = element_text(size = 10,angle = 45,hjust = 1),
+          axis.text.y = element_text(size = 12, angle = 45, hjust = 1),
+          legend.position = 'none',
+          panel.grid.major = element_line(color = "grey95")))}
+  if(is.null(color_threshold)){
+    return(
+    ggplot(data = map, aes(x = V1, y = V2)) +
+      geom_count(aes(color = '')) +
+      geom_text(aes(label = n, hjust = 0.5, vjust = 0.5)) +
+      theme_bw() +
+      theme(axis.line = element_line(colour = 'grey35', size = 1.1),
+            axis.title.x = element_text(size = 0),
+            axis.title.y = element_text(size = 0),
+            axis.text.x = element_text(size = 10,angle = 45,hjust = 1),
+            axis.text.y = element_text(size = 12, angle = 45, hjust = 1),
+            legend.position = 'none',
+            panel.grid.major = element_line(color = "grey95")))}
 }
 
 
