@@ -106,20 +106,21 @@ plot_PCA <- function(matrix, dataset_name, labels, label_name, pcs= c(1,2), is_p
   if(is_continuous){
     min <- min(labels)
     max <- max(labels)
-    weights <- (labels - min) #/(max- min)
+    weights <- (labels - min)/(max- min)
     xdens <- axis_canvas(p, axis = "x")+
-      geom_density(data, mapping = aes(x = !!first_pc), fill= '#35b779ff', 
+      geom_density(data, mapping = aes(x = !!first_pc), fill= '#1f9a8eff', 
                    color= 'grey45', alpha = 0.45, size = 0.2) +
-      geom_density(data, mapping = aes(x = !!first_pc, weight = weights), fill= '#35b54a', 
+      geom_density(data, mapping = aes(x = !!first_pc, weight = rank(labels)^2), fill= '#8fd744ff', 
                    color= 'grey45', alpha = 0.45, size = 0.2, bw = "nrd0") +
-      theme(legend.position = "none")
+      scale_fill_manual(name = 'Densities') +
+      theme(legend.position = 'right')
     
     ydens <- axis_canvas(p, axis = "y", coord_flip = TRUE) +
-      geom_density(data, mapping = aes(x = !!second_pc), fill= '#35b779ff', 
-                   color= 'grey45', alpha = 0.45, size = 0.2) +
-      geom_density(data, mapping = aes(x = !!second_pc, weight = weights), fill= '#35b54a', 
+      geom_density(data, mapping = aes(x = !!second_pc), fill= '#1f9a8eff', 
+                   color= 'grey45', alpha = 0.45, size = 0.2,) +
+      geom_density(data, mapping = aes(x = !!second_pc, weight = rank(labels)^2), fill= '#8fd744ff', 
                    color= 'grey45', alpha = 0.45, size = 0.2, bw = "nrd0") +
-      theme(legend.position = "none")+
+      theme(legend.position = "none") +
       coord_flip()
   }
   
