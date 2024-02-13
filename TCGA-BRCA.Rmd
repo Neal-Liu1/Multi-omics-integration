@@ -18,6 +18,7 @@ library(RUVIIIPRPS)
 library(MOFA2)
 library(ggplot2)
 library(dplyr)
+library(tidyr)
 library(edgeR)
 library(parallel)
 library(readr)
@@ -29,11 +30,14 @@ library(umap)
 library(Rtsne)
 library(singscore)
 library(MultiAssayExperiment)
+library(WGCNA)
+library(plotly)
+library(viridis)
+library(ComplexHeatmap)
 
 source('Helper_functions.R')
 
 library(devtools)
-install_github('mtrussart/RUVIIIPRPS' , force = T)
 
 ```
 
@@ -68,7 +72,7 @@ p2
 
 ```{r}
 
-plot_3D_PCA(log2(assay(data_transcriptome, 'HTseq_FPKM')+1)[edgeR::filterByExpr(assay(data_transcriptome,'HTseq_counts'), min_count = 10, min.total.count = 80),], data_transcriptome@colData$subtype_BRCA_Subtype_PAM50__RNAseq)
+plot_3D_PCA(log2(assay(data_transcriptome, 'HTseq_FPKM')+1)[edgeR::filterByExpr(assay(data_transcriptome,'HTseq_counts'), min_count = 10, min.total.count = 80),], label_vector = data_transcriptome@colData$subtype_BRCA_Subtype_PAM50__RNAseq)
 
 ```
 
@@ -100,11 +104,16 @@ data_methylation_450k <- data_methylation_450k[which(apply(assay(data_methylatio
 data_methylation_450k <- data_methylation_450k[!is.na(data_methylation_450k@rowRanges@elementMetadata@listData$gene),]
 
 # replace remaining NAs with row means and calculate M values
-assay(data_methylation_450k) <- replace_all_NAs_with_row_means(assay(data_methylation_450k))
+
+# The replace NAs calculation takes a while so we're going to save the object and load it
+# assay(data_methylation_450k) <- replace_all_NAs_with_row_means(assay(data_methylation_450k))
+
+data_methylation_450k <- readRDS('Data/Computationally intensive objects/BRCA 450k processed.rds')
 
 assay(data_methylation_450k, 'M_values') <- log2(assay(data_methylation_450k)/(1-assay(data_methylation_450k)))
 
-methylation_450k_pca <- list(BiocSingular::runSVD(t(assay(data_methylation_450k,'M_values')),k=10,center=T))[[1]]
+# methylation_450k_pca <- list(BiocSingular::runSVD(t(assay(data_methylation_450k,'M_values')),k=10,center=T))[[1]]
+methylation_450k_pca <- readRDS('Data/Computationally intensive objects/BRCA 450k pca.rds')
 
 plot_PCA(methylation_450k_pca,'M values', data_methylation_450k@colData$paper_BRCA_Subtype_PAM50, 'pam50 subtype', is_pca_obj = T, pcs = c(1,2))
 
@@ -196,13 +205,13 @@ data_methylation_450k@colData <- data_methylation_450k@colData[colnames(data_met
 data_methylation_450k@colData$platform <- '450k'
 
 
-data_methylation@colData <- data_methylation@colData[match(colnames(data_methylation_450k@colData),colnames(data_methylation@colData))]
+data_methylation@colData <- data_methylation@colData[colnames(data_methylation_450k@colData) %in% colnames(data_methylation@colData)]
 data_methylation@colData$platform <- '27k'
 
 illumina_27k_rowdata <-  data_methylation@rowRanges
+# rownames(illumina_27k_rowdata) <- data_methylation@NAMES
 illumina_450k_rowdata <-  data_methylation_450k@rowRanges
-rowRanges(data_methylation) <- NULL
-rowRanges(data_methylation_450k) <- NULL
+# rownames(illumina_450k_rowdata) <- data_methylation_450k@NAMES
 
 ```
   
@@ -234,7 +243,7 @@ plot_PCA(all_methylation_pca,'M values of all methylation patients', data_methyl
 ```
 
 ```{r}
-plot_3D_PCA(all_methylation_pca$u, data_methylation_complete@colData$paper_BRCA_Subtype_PAM50, is_PCA_obj = T)
+plot_3D_PCA(all_methylation_pca, data_methylation_complete@colData$paper_BRCA_Subtype_PAM50, is_PCA_obj = T)
 
 ```
 
@@ -341,13 +350,13 @@ NCGs <- methylation_normalized@metadata$NCG
 
 pca_NCGs <- run_PCA(assay(methylation_normalized,2)[NCGs, ])
 
-plot_3D_PCA(pca_NCGs$u, methylation_normalized@colData$platform, is_PCA_obj = T)
+plot_3D_PCA(pca_NCGs, methylation_normalized@colData$platform, is_PCA_obj = T)
 
 
 ```
 
 ```{r}
-plot_3D_PCA(pca_NCGs$u, methylation_normalized@colData$Plate, is_PCA_obj = T)
+plot_3D_PCA(pca_NCGs, methylation_normalized@colData$Plate, is_PCA_obj = T)
 
 ```
 
@@ -386,7 +395,9 @@ methylation_normalized <- RUVIIIPRPS::ruvIIIMultipleK(se.obj = methylation_norma
 
 ```{r, fig.width= 12}
 
-normalized_methylation_pcas <- lapply(assays(methylation_normalized)[-1], run_PCA)
+# normalized_methylation_pcas <- lapply(assays(methylation_normalized)[-1], run_PCA)
+# the pca takes a while so we saved it.
+normalized_methylation_pcas <- readRDS(file = 'Data/Computationally intensive objects/BRCA normalized methylation pcas.rds')
 
 p1 <- plot_vector_correlation(normalized_methylation_pcas, c('M values', 'RUV k6', 'RUV k10', 'RUV k14'), methylation_normalized@colData$platform, 'Platform')
 
@@ -546,7 +557,10 @@ transcriptome_normalized <- RUVIIIPRPS::ruvIIIMultipleK(se.obj = transcriptome_n
 
 ```{r, fig.width= 13}
 
-normalized_transcriptome_pcas <- lapply(assays(transcriptome_normalized), run_PCA)
+# normalized_transcriptome_pcas <- lapply(assays(transcriptome_normalized), run_PCA)
+
+# The object is saved because it takes a while to compute. 
+normalized_transcriptome_pcas <- readRDS(file= 'Data/Computationally intensive objects/BRCA normalized transcriptome pcas.rds')
 
 p1 <- plot_vector_correlation(normalized_transcriptome_pcas, names(assays(transcriptome_normalized)), transcriptome_normalized@colData$batch, 'batch')
 
@@ -611,9 +625,10 @@ plot_RLE(assay(transcriptome_normalized,'RUV_K10_on_HTseq_counts')[,600:1168], t
 
 
 ```
+Save the data
 
 ```{r}
-saveRDS(list(transcriptome_normalized, methylation_normalized), file = 'Data/TCGA_BRCA_Normalized_transcriptome&methylation.rds')
+# saveRDS(list(transcriptome_normalized, methylation_normalized), file = 'Data/TCGA_BRCA_Normalized_transcriptome&methylation.rds')
 
 ```
 
@@ -622,7 +637,13 @@ Explore the CPTAC proteome data
 
 ```{r}
 
+TCGA_Breast_BI_Proteome_itraq <- read_delim("Data/TCGA_Breast_BI_Proteome.itraq.tsv", 
+    delim = "\t", escape_double = FALSE, 
+    trim_ws = TRUE)
 
+library(readxl)
+CPTAC_TCGA_BreastCancer_select_clinical_data_r1 <- read_excel("Data/CPTAC_TCGA_BreastCancer_select_clinical_data_r1.xlsx", 
+    sheet = "Nature2012_subtype_calls")
 
 TCGA_Breast_BI_Proteome_itraq1 <- as.data.frame(TCGA_Breast_BI_Proteome_itraq[,-1])
 rownames(TCGA_Breast_BI_Proteome_itraq1) <- unlist(TCGA_Breast_BI_Proteome_itraq[,1])
@@ -680,6 +701,7 @@ data_proteome@colData$singscore_purity_rna[is.na(data_proteome@colData$singscore
 
 
 # add batch data
+CPTAC_TCGA_Breast_Cancer_iTRAQ_Sample_Mapping <- read_excel("Data/CPTAC_TCGA_Breast_Cancer_iTRAQ_Sample_Mapping.xlsx")
 proteome_batch_data <-tidyr::pivot_longer(as.data.frame(t(apply(CPTAC_TCGA_Breast_Cancer_iTRAQ_Sample_Mapping, 1, function(x) {substr(x[3:5],6,16)}))[-(37:41),]), cols = everything())
 proteome_batch_data$batch <- rep(1:36, each = 3)
 proteome_batch_data <- proteome_batch_data[match(substr(data_proteome@colData@rownames,1,11) , proteome_batch_data$value),]
@@ -805,8 +827,8 @@ plot_3D_PCA(assay(proteome_normalized, 'RUV_K12_on_raw_unshared_log_ratios'), pr
 ```
 
 ```{r}
-transcript_subtype_ftest <- ftest(assay(transcriptome_normalized, 'RUV_K8_on_HTseq_counts'), transcriptome_normalized@colData$subtype)
-transcript_subtype_ftest1 <- transcript_subtype_ftest[order(transcript_subtype_ftest[['Adj.PValue']]),]
+# transcript_subtype_ftest <- ftest(assay(transcriptome_normalized, 'RUV_K8_on_HTseq_counts'), transcriptome_normalized@colData$subtype)
+# transcript_subtype_ftest1 <- transcript_subtype_ftest[order(transcript_subtype_ftest[['Adj.PValue']]),]
 
 ```
 
@@ -837,7 +859,6 @@ distances <- dist(proteome_rle_medians)
 hc <- hclust(distances)
 # Use dynamic cut
 dynamic_clusters <- cutreeDynamic(dendro=hc,minClusterSize=4)
-avg_pc_scores$combined_batch <- dynamic_clusters
 data_proteome@colData$combined_batch_rle_medians <- factor(dynamic_clusters)
 
 plot_vector_correlation(assays(proteome_normalized), names(assays(proteome_normalized)), data_proteome@colData$combined_batch_rle_medians, 'rle medians batch', is.pca.obj = F)
@@ -880,16 +901,40 @@ plot_RLE(assay(proteome_normalized_rle_medians,'RUV_K12_on_raw_unshared_log_rati
 ```
 
 ```{r, fig.width= 6, fig.height= 3}
-
 plot_count_map(proteome_normalized_rle_medians@colData$combined_batch_rle_medians, proteome_normalized_rle_medians@colData$subtypes, color_threshold = 1) 
 
 ```
 
+```{r}
+
+empty <- MultiAssayExperiment()
+data(miniACC)
+
+```
+
+
+Muck around with WGCNA for eigengene summarization
+
+```{r}
+sft = pickSoftThreshold(t(assay(transcriptome_normalized, 'RUV_K8_on_HTseq_counts')), powerVector = c(1:10))
+plot(x=sft$fitIndices$Power, y=sft$fitIndices$SFT.R.sq)
+```
+
+```{r}
+adjacency <- adjacency(t(assay(transcriptome_normalized, 'RUV_K8_on_HTseq_counts'))[,1:6000], power= 3)
+TOM = TOMsimilarity(adjacency)
+TOMdist <- 1-TOM
+
+geneTree = hclust(d=as.dist(1-TOM), method = "average")
+dynamicMods = cutreeDynamic(dendro = geneTree, distM = (1-TOM), # deepSplit = 2, pamRespectsDendro = FALSE
+                            cutHeight = 0.95)
+
+plot(geneTree, xlab = '', sub= '', labels = F)
+```
+
+```{r}
 
 
 
-
-
-
-
+```
 
