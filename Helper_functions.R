@@ -230,28 +230,44 @@ compute_log_transformed_RLE <- function(matrix){
 
 
 
-plot_RLE <- function(matrix, batch_info, ylimit=c(-10,10)){
+plot_RLE <- function(matrix, batch_info, ylimit=c(-10,10), is_continuous = F){
   # taking a matrix of RLE scores, and a vector of batch information (in the same order as your samples), and y axis limits as a vector of 2 numbers, output an RLE graph ordered by batch
   
   RLE_matrix <- as.data.frame(compute_log_transformed_RLE(matrix))
   
   RLE_long <- reshape2::melt(RLE_matrix)
   
-  RLE_long$Batch <- factor(rep(batch_info, each= nrow(RLE_matrix)))
+  if(!is_continuous){RLE_long$Batch <- factor(rep(batch_info, each= nrow(RLE_matrix)))}
+  if(is_continuous){RLE_long$Batch <- rep(batch_info, each= nrow(RLE_matrix))}
   
   RLE_long <- RLE_long %>%
     arrange(Batch, variable) %>%
     mutate(variable = factor(variable, levels = unique(variable)))
   
+  if(!is_continuous){return(
   ggplot(RLE_long, aes(x = variable, y = value, fill = Batch)) +
     geom_boxplot(outlier.shape = NA,alpha=0.9, linewidth=0.5) +  # Set coef to Inf to extend whiskers to max/min + 
-    theme(axis.text.x = element_blank())+
     labs(x = "Sample", y = "RLE Score", fill = "Batch", color = 'Batch')+
     coord_cartesian(ylim=ylimit)+
     theme_minimal() +
-    theme(panel.border = element_rect(colour = "grey85", fill=NA, size=1.1),axis.text.x = element_blank(),
+    theme(panel.border = element_rect(colour = "grey85", fill=NA, size=1.1),
+          axis.text.x = element_blank(),
           panel.grid.major = element_line(color = "grey96"),)
-  
+  )
+  }
+  if(is_continuous){return(
+    ggplot(RLE_long, aes(x = variable, y = value, fill = Batch)) +
+      geom_boxplot(outlier.shape = NA,alpha=0.9, linewidth=0.5) +  # This will use the viridis color scale for the continuous variable
+      scale_fill_viridis() +  
+      theme_minimal() +
+      labs(x = "Sample", y = "RLE Score", fill = "Batch", color = 'Batch')+
+      coord_cartesian(ylim=ylimit)+
+      labs(x = "Sample", y = "RLE Score", color = "Continuous Variable") +
+      theme(panel.border = element_rect(colour = "grey85", fill=NA, size=1.1),
+            axis.text.x = element_blank(),
+            panel.grid.major = element_line(color = "grey96"),)
+  )
+  }
 }
 
 
