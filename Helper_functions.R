@@ -15,7 +15,16 @@ remove_NA_rows <- function(data, fraction_NAs = 0.5){
 
 replace_all_NAs_with_row_means <- function(matrix){
   # replaces all NAs in a matrix with the row means
-  output_matrix <- apply(matrix, 1, function(row){row[is.na(row)] <- mean(row, na.rm = TRUE); return(row)})
+  #rowmeans <- rowMeans(matrix, na.rm = T)
+  output_matrix <-apply(matrix, 1, function(row){row[is.na(row)] <- mean(row, na.rm = TRUE); return(row)})
+  #output_list <- parallel::mclapply(1:nrow(matrix), function(i) {
+  #  row <- matrix[i, ]
+  #  row[is.na(row)] <- rowmeans[i]
+  #  ;return(row)}, mc.cores = 6)
+  
+  #output_matrix <- do.call(rbind, output_list)
+  #print(dim(output_matrix))
+  #rownames(output_matrix) <- rownames(matrix)
   
   return(t(output_matrix))
 }
@@ -230,7 +239,7 @@ compute_log_transformed_RLE <- function(matrix){
 
 
 
-plot_RLE <- function(matrix, batch_info, ylimit=c(-10,10), is_continuous = F){
+plot_RLE <- function(matrix, batch_info, ylimit=c(-4,4), is_continuous = F, variable_name = NULL){
   # taking a matrix of RLE scores, and a vector of batch information (in the same order as your samples), and y axis limits as a vector of 2 numbers, output an RLE graph ordered by batch
   
   RLE_matrix <- as.data.frame(compute_log_transformed_RLE(matrix))
@@ -247,7 +256,7 @@ plot_RLE <- function(matrix, batch_info, ylimit=c(-10,10), is_continuous = F){
   if(!is_continuous){return(
   ggplot(RLE_long, aes(x = variable, y = value, fill = Batch)) +
     geom_boxplot(outlier.shape = NA,alpha=0.9, linewidth=0.5) +  # Set coef to Inf to extend whiskers to max/min + 
-    labs(x = "Sample", y = "RLE Score", fill = "Batch", color = 'Batch')+
+    labs(x = "Sample", y = "RLE Score", fill = variable_name, color = 'Batch')+
     coord_cartesian(ylim=ylimit)+
     theme_minimal() +
     theme(panel.border = element_rect(colour = "grey85", fill=NA, size=1.1),
@@ -260,7 +269,7 @@ plot_RLE <- function(matrix, batch_info, ylimit=c(-10,10), is_continuous = F){
       geom_boxplot(outlier.shape = NA,alpha=0.9, linewidth=0.5) +  # This will use the viridis color scale for the continuous variable
       scale_fill_viridis() +  
       theme_minimal() +
-      labs(x = "Sample", y = "RLE Score", fill = "Batch", color = 'Batch')+
+      labs(x = "Sample", y = "RLE Score", fill = variable_name, color = 'Batch')+
       coord_cartesian(ylim=ylimit)+
       labs(x = "Sample", y = "RLE Score", color = "Continuous Variable") +
       theme(panel.border = element_rect(colour = "grey85", fill=NA, size=1.1),
