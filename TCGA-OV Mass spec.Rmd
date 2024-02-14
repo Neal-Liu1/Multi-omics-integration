@@ -3101,11 +3101,47 @@ omics_data <- list(PRPS_confident_subtypes_raw_counts, PRPS_confident_subtypes_M
 
 saveRDS(omics_data, file = "Data/Normalized_transcriptome&methylation_TCGA_OV.rds")
 
+
+
 ```
 
+Some exploration of the things covered at the ovarian cancer seminar at WEHI on 13/02/24
+HLA-E activation, (co expressed with HLA-A??) in STIC (precursor to HGSOC) 
+leads to reduced NK & T cell activation
 
 
+```{r, fig.height= 9, fig.width= 12}
+OV_data <- readRDS("Data/Normalized_transcriptome&methylation_TCGA_OV.rds")
+p1 <- plot_PCA(assay(OV_data[[1]],2), 'normalized transcriptome', assay(OV_data[[1]],2)[which(OV_data[[1]]@elementMetadata$gene_name == 'HLA-E'),],'HLA-E expression', is_continuous = T)
+p2 <- plot_PCA(assay(OV_data[[1]],2), 'normalized transcriptome', assay(OV_data[[1]],2)[which(OV_data[[1]]@elementMetadata$gene_name == 'HLA-A'),],'HLA-A expression', is_continuous = T)
+p3 <- plot_PCA(assay(OV_data[[1]],2),'normalized transcriptome', OV_data[[1]]@colData$subtype,'subtypes', is_continuous = F)
 
+gridExtra::grid.arrange(p1,p2,p3, ncol=2, nrow=2)
+
+```
+
+```{r, fig.width= 8, fig.height= 8}
+p1 <- ggplot(mapping = aes(x=as.vector(assay(OV_data[[1]],2)[which(OV_data[[1]]@elementMetadata$gene_name == 'HLA-E'),]), fill=OV_data[[1]]@colData$subtype)) +
+  geom_density(alpha=0.5) + # alpha for transparency to see overlap
+  labs(x="normalized HLA-E log2 expression", y="Density", fill="Tumor Subtype") +
+  ggtitle('Distribution of HLA-E') +
+  theme_minimal() +
+  scale_fill_brewer(palette="Set1")+
+  theme(panel.border=element_rect(colour = "grey80", fill=NA, size=0.8),
+        aspect.ratio = 1/2)
+
+p2 <- ggplot(mapping = aes(x=as.vector(assay(OV_data[[1]],2)[which(OV_data[[1]]@elementMetadata$gene_name == 'HLA-A'),]), fill=OV_data[[1]]@colData$subtype)) +
+  geom_density(alpha=0.5) + # alpha for transparency to see overlap
+  labs(x="normalized HLA-A log2 expression", y="Density", fill="Tumor Subtype") +
+  ggtitle('Distribution of HLA-A') +
+  theme_minimal() +
+  scale_fill_brewer(palette="Set1")+
+  theme(panel.border=element_rect(colour = "grey80", fill=NA, size=0.8),
+        aspect.ratio = 1/2)
+  
+gridExtra::grid.arrange(p1,p2, nrow= 2)
+  
+```
 
 
 
