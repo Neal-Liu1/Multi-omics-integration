@@ -34,6 +34,7 @@ library(WGCNA)
 library(plotly)
 library(viridis)
 library(ComplexHeatmap)
+library(pheatmap)
 
 source('Helper_functions.R')
 
@@ -608,6 +609,10 @@ plot_RLE(log2(assay(transcriptome_normalized,'HTseq_counts')[,1:600]+1), transcr
 
 ```
 
+```{r, fig.width= 12, fig.height= 6}
+plot_RLE(log2(1+assay(transcriptome_normalized,'HTseq_counts'))[,1:300],transcriptome_normalized@colData$log2_lib_size[1:300], is_continuous = T, ylimit= c(-4,4), variable_name ='log2 libsize')
+```
+
 ```{r, fig.width= 18, fig.height= 7}
 plot_RLE(log2(assay(transcriptome_normalized,'HTseq_counts')[,600:1168]+1), transcriptome_normalized@colData$batch[600:1168], ylimit = c(-4,4))
 
@@ -728,6 +733,10 @@ plot_RLE(assay(data_proteome,1), data_proteome@colData$batch, ylim = c(-4,4))
 plot_RLE(sweep(assay(data_proteome,1), 2, data_proteome@colData$Median, FUN = '+'), data_proteome@colData$batch, ylim = c(-4,4))
 
 
+```
+
+```{r, fig.width= 12, fig.height= 6}
+plot_RLE(assay(proteome_normalized,4),proteome_normalized@colData$Median, is_continuous = T, ylimit= c(-4,4), variable_name = 'median reporter ion log ratio')
 ```
 
 ```{r, fig.width= 13, fig.height= 8}
@@ -920,8 +929,8 @@ sft = pickSoftThreshold(t(assay(transcriptome_normalized, 'RUV_K8_on_HTseq_count
 plot(x=sft$fitIndices$Power, y=sft$fitIndices$SFT.R.sq)
 ```
 
-```{r}
-adjacency <- adjacency(t(assay(transcriptome_normalized, 'RUV_K8_on_HTseq_counts'))[,1:6000], power= 3)
+```{r, fig.width=10}
+adjacency <- adjacency(t(assay(transcriptome_normalized, 'RUV_K8_on_HTseq_counts'))[,1:7000], power= 3)
 TOM = TOMsimilarity(adjacency)
 TOMdist <- 1-TOM
 
@@ -929,12 +938,66 @@ geneTree = hclust(d=as.dist(1-TOM), method = "average")
 dynamicMods = cutreeDynamic(dendro = geneTree, distM = (1-TOM), # deepSplit = 2, pamRespectsDendro = FALSE
                             cutHeight = 0.95)
 
+table(dynamicMods)
+
 plot(geneTree, xlab = '', sub= '', labels = F)
+```
+
+```{r, fig.height= 5}
+
+module <- 2
+
+p1 <- pheatmap(assay(transcriptome_normalized, 'RUV_K8_on_HTseq_counts')[as.vector(which(dynamicMods == module)),1:50],
+         show_rownames = T, 
+         show_colnames = F,
+         clustering_distance_rows = "euclidean", 
+         clustering_distance_cols = "euclidean",
+         clustering_method = "complete",
+         color = colorRampPalette(c("black", 'green'))(255),
+         border_color = NA,
+         fontsize_row = 7, 
+         )
+
+eigengene_scores <- (run_PCA(assay(transcriptome_normalized, 'RUV_K8_on_HTseq_counts')[as.vector(which(dynamicMods == module)),1:50])$u[,1])[p1$tree_col$order]
+eigengene_data <- data.frame(patient = substr(names(eigengene_scores), 9,12), score = as.vector(eigengene_scores))
+
+ggplot(eigengene_data, aes(y=score, x=patient))+
+  geom_bar(stat = "identity", 
+           aes(fill = score > 0), 
+           show.legend = FALSE) + 
+  scale_fill_manual(values = c('red', "green")) + 
+  # scale_color_manual(values = c("green", "red")) + 
+  theme_minimal() + 
+  labs(x = "Samples", y = "Eigengene expression", title = "Eigengene Expression")+
+  theme(axis.text.x = element_text(size = 0,angle = 45,hjust = 1),
+        panel.border=element_rect(colour = "grey90", fill=NA, size=0.8),
+        axis.line = element_line(colour = "grey90", linewidth = 0.8),
+        panel.grid.major = element_line(color = "grey98"))
+
 ```
 
 ```{r}
 
 
 
+
 ```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
