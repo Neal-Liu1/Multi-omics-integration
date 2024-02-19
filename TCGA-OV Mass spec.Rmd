@@ -3099,7 +3099,7 @@ rowData(PRPS_confident_subtypes_raw_counts) <- data_transcriptome@rowRanges[matc
 
 omics_data <- list(PRPS_confident_subtypes_raw_counts, PRPS_confident_subtypes_M_values)
 
-saveRDS(omics_data, file = "Data/Normalized_transcriptome&methylation_TCGA_OV.rds")
+# saveRDS(omics_data, file = "Data/Normalized_transcriptome&methylation_TCGA_OV.rds")
 
 
 
@@ -3142,6 +3142,228 @@ p2 <- ggplot(mapping = aes(x=as.vector(assay(OV_data[[1]],2)[which(OV_data[[1]]@
 gridExtra::grid.arrange(p1,p2, nrow= 2)
   
 ```
+
+```{r}
+# OV_data <- readRDS(file = "Data/Normalized_transcriptome&methylation_TCGA_OV.rds")
+
+ov_transcriptome_normalized <- OV_data[[1]]
+ov_transcriptome_normalized <- SummarizedExperiment(assays = list(raw_counts = assays(ov_transcriptome_normalized)[["raw_counts"]]),
+                                                            colData = ov_transcriptome_normalized@colData,
+                                                            rowData = ov_transcriptome_normalized@elementMetadata)
+
+
+ov_transcriptome_normalized_with_purity <- supervisedPRPS(se.obj=ov_transcriptome_normalized[,which(ov_transcriptome_normalized@colData$Confident_subtypes == 'yes')],
+                       assay.name='raw_counts',
+                       bio.variable= 'subtype',
+                       uv.variables=c('log2_libsize','batch'),
+                       batch.variable = 'batch',
+                       min.sample.for.prps = 3,
+                       min.sample.per.batch= 3,
+                       apply.log = T,
+                       pseudo.count = 1,
+                       assess.se.obj = T,
+                       assess.cor.variables = T,
+                       save.se.obj = TRUE,
+                       verbose = T)
+
+
+PRPS_metadata <- ov_transcriptome_normalized_with_purity@metadata
+ov_transcriptome_normalized_with_purity <- ov_transcriptome_normalized
+ov_transcriptome_normalized_with_purity@metadata <- PRPS_metadata
+
+
+ov_transcriptome_normalized_with_purity <- supervisedFindNCG(se.obj=ov_transcriptome_normalized_with_purity,
+                         assay.name= 'raw_counts',
+                         bio.variables= 'subtype',
+                         uv.variables= c('log2_libsize','batch'),
+                         no.ncg = 1000,
+                         regress.out.uv.variables = F,
+                         regress.out.bio.variables = F,
+                         apply.normalization= F,
+                         normalization =  'CPM',
+                         assess.se.obj = T,
+                         apply.log = T,
+                         pseudo.count = 1,
+                         save.se.obj = TRUE,
+                         verbose = T)
+
+replicate.data=t(do.call(cbind, ov_transcriptome_normalized_with_purity@metadata[['PRPS']][['supervised']]))
+
+
+ov_transcriptome_normalized_with_purity <- ruvIIIMultipleK(se.obj=ov_transcriptome_normalized_with_purity,
+                    assay.name='raw_counts',
+                    apply.log=T,
+                    pseudo.count = 1,
+                    replicate.data=replicate.data,
+                    ctl=ov_transcriptome_normalized_with_purity@metadata[['NCG']],
+                    k = c(4,8, 12),
+                    eta = NULL,
+                    include.intercept = T,
+                    apply.average.rep = F,
+                    fullalpha = NULL,
+                    return.info = F,
+                    inputcheck = T,
+                    assess.se.obj = T,
+                    remove.na = 'measurements',
+                    save.se.obj = T,
+                    verbose = T)
+
+
+
+
+```
+
+
+```{r, fig.width= 12}
+
+transcriptome_pcas <- lapply(assays(ov_transcriptome_normalized_with_purity), run_PCA)
+
+
+p1 <- plot_vector_correlation(transcriptome_pcas,
+                             names(transcriptome_pcas),
+                        ov_transcriptome_normalized_with_purity@colData$subtype,
+                        'subtypes'
+                        )
+
+p2 <- plot_vector_correlation(transcriptome_pcas,
+                             names(transcriptome_pcas),
+                        ov_transcriptome_normalized_with_purity@colData$batch,
+                        'batch'
+                        )
+
+p3 <- plot_linear_correlation(transcriptome_pcas,
+                             names(transcriptome_pcas),
+                        ov_transcriptome_normalized_with_purity@colData$log2_libsize,
+                        'log2 libsize'
+                        )
+
+p4 <- plot_linear_correlation(transcriptome_pcas,
+                             names(transcriptome_pcas),
+                        ov_transcriptome_normalized_with_purity@colData$Calculated_singscore_purity,
+                        'purity'
+                        )
+
+gridExtra::grid.arrange(p1, p2, p3, p4, ncol= 2, nrow = 2)
+
+```
+
+
+
+
+
+```{r}
+
+ov_methylation_normalized <- OV_data[[2]]
+ov_methylation_normalized <- SummarizedExperiment(assays = list(M_values = assays(ov_methylation_normalized)[["M_values"]]),
+                                                            colData = ov_methylation_normalized@colData,
+                                                            rowData = ov_methylation_normalized@elementMetadata)
+
+
+ov_methylation_normalized_with_purity <- supervisedPRPS(se.obj=ov_methylation_normalized[,which(ov_methylation_normalized@colData$Confident_subtypes == 'yes')],
+                       assay.name='M_values',
+                       bio.variable= 'subtype',
+                       uv.variables=c('batch'),
+                       batch.variable = 'batch',
+                       min.sample.for.prps = 2,
+                       min.sample.per.batch= 3,
+                       apply.log = F,
+                       pseudo.count = 1,
+                       assess.se.obj = T,
+                       assess.cor.variables = T,
+                       save.se.obj = TRUE,
+                       verbose = T)
+
+
+PRPS_metadata <- ov_methylation_normalized_with_purity@metadata
+ov_methylation_normalized_with_purity <- ov_methylation_normalized
+ov_methylation_normalized_with_purity@metadata <- PRPS_metadata
+
+
+ov_methylation_normalized_with_purity <- supervisedFindNCG(se.obj=ov_methylation_normalized_with_purity,
+                         assay.name= 'M_values',
+                         bio.variables= 'subtype',
+                         uv.variables= c('batch'),
+                         no.ncg = 1000,
+                         regress.out.uv.variables = F,
+                         regress.out.bio.variables = F,
+                         apply.normalization= F,
+                         normalization =  'CPM',
+                         assess.se.obj = T,
+                         apply.log = F,
+                         pseudo.count = 1,
+                         save.se.obj = TRUE,
+                         verbose = T)
+
+replicate.data=t(do.call(cbind, ov_methylation_normalized_with_purity@metadata[['PRPS']][['supervised']]))
+
+
+ov_methylation_normalized_with_purity <- ruvIIIMultipleK(se.obj=ov_methylation_normalized_with_purity,
+                    assay.name='M_values',
+                    apply.log=F,
+                    pseudo.count = 1,
+                    replicate.data=replicate.data,
+                    ctl=ov_methylation_normalized_with_purity@metadata[['NCG']],
+                    k = c(6,9,12),
+                    eta = NULL,
+                    include.intercept = T,
+                    apply.average.rep = F,
+                    fullalpha = NULL,
+                    return.info = F,
+                    inputcheck = T,
+                    assess.se.obj = T,
+                    remove.na = 'measurements',
+                    save.se.obj = T,
+                    verbose = T)
+
+
+
+
+
+```
+
+```{r, fig.width= 12}
+
+methylation_pcas <- lapply(assays(ov_methylation_normalized_with_purity), run_PCA)
+
+p1 <- plot_vector_correlation(methylation_pcas,
+                             names(methylation_pcas),
+                        ov_methylation_normalized_with_purity@colData$subtype,
+                        'subtypes'
+                        )
+
+p2 <- plot_vector_correlation(methylation_pcas,
+                             names(methylation_pcas),
+                        ov_methylation_normalized_with_purity@colData$batch,
+                        'batch'
+                        )
+
+p3 <- plot_linear_correlation(methylation_pcas,
+                             names(methylation_pcas),
+                        ov_methylation_normalized_with_purity@colData$Calculated_singscore_purity,
+                        'purity'
+                        )
+
+
+gridExtra::grid.arrange(p1, p2, p3, ncol= 2, nrow = 2)
+
+```
+
+save both purity adjusted & non adjusted normalized data.
+
+```{r}
+
+OV_data[[3]] <- transcriptome_normalized_with_purity
+OV_data[[4]] <- methylation_normalized_with_purity
+names(OV_data) <- c('normalized_transcriptome_raw_counts', 'normalized_methylation_M_values', 'normalized_transcriptome_with_purity', 'normalized_methylation_with_purity')
+
+# saveRDS(OV_data, file = "Data/Normalized_transcriptome&methylation_TCGA_OV.rds")
+
+
+```
+
+
+
+
 
 
 
