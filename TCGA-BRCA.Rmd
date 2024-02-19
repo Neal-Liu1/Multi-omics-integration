@@ -406,7 +406,10 @@ p2 <- plot_vector_correlation(normalized_methylation_pcas, c('M values', 'RUV k6
 
 p3 <- plot_linear_correlation(normalized_methylation_pcas, c('M values', 'RUV k6', 'RUV k10', 'RUV k14'), methylation_normalized@colData$singscore_purity, 'purity')
 
-gridExtra::grid.arrange(p1,p2, p3, ncol = 2, nrow = 2)
+p4 <- plot_vector_correlation(normalized_methylation_pcas, c('M values', 'RUV k6', 'RUV k10', 'RUV k14'), methylation_normalized@colData$subtype, 'subtype')
+
+
+gridExtra::grid.arrange(p1,p2, p3,p4,  ncol = 2, nrow = 2)
 
 ```
 
@@ -628,12 +631,6 @@ plot_RLE(assay(transcriptome_normalized,'RUV_K10_on_HTseq_counts')[,1:600], tran
 ```{r, fig.width= 18, fig.height= 7}
 plot_RLE(assay(transcriptome_normalized,'RUV_K10_on_HTseq_counts')[,600:1168], transcriptome_normalized@colData$batch[600:1168], ylimit = c(-4,4))
 
-
-```
-Save the data
-
-```{r}
-# saveRDS(list(transcriptome_normalized, methylation_normalized), file = 'Data/TCGA_BRCA_Normalized_transcriptome&methylation.rds')
 
 ```
 
@@ -976,23 +973,119 @@ ggplot(eigengene_data, aes(y=score, x=patient))+
 
 ```
 
+On second thought we might want to also use non-purity adjusted data in our integration to compare with purity adjusted data to see if there's any interesting things. 
+
+
 ```{r}
 
+methylation_normalized_with_purity <- SummarizedExperiment( assays = list(M_values = assays(methylation_normalized)[["M_values"]]),
+                                                            colData = methylation_normalized@colData,
+                                                            rowRanges = methylation_normalized@rowRanges)
 
+
+methylation_normalized_with_purity <- RUVIIIPRPS::normalise(methylation_normalized_with_purity,
+                                                assay.name = 'M_values',
+                                                k = c(6,10,14),
+                                                bio.variable.prps = 'subtype', 
+                                                uv.variables.prps = c('platform','Plate'),
+                                                batch.variable.prps = 'Plate',
+                                                min.sample.per.batch.prps = 2,
+                                                norm.assay.name.ncg = 'M_values',
+                                                bio.variables.ncg = 'subtypes',
+                                                uv.variables.ncg = c('platform','Plate'),
+                                                assess.se.obj = F,
+                                                apply.log = F)
+
+```
+
+```{r, fig.width= 12}
+
+# normalized_methylation_pcas_with_purity <- lapply(assays(methylation_normalized_with_purity), run_PCA)
+# the pca takes a while so we saved it.
+normalized_methylation_pcas_with_purity <- readRDS(file = 'Data/Computationally intensive objects/BRCA normalized methylation pcas with purity.rds')
+
+p1 <- plot_vector_correlation(normalized_methylation_pcas_with_purity, c('M values', 'RUV k6', 'RUV k10', 'RUV k14'), methylation_normalized_with_purity@colData$platform, 'Platform')
+
+p2 <- plot_vector_correlation(normalized_methylation_pcas_with_purity, c('M values', 'RUV k6', 'RUV k10', 'RUV k14'), methylation_normalized_with_purity@colData$Plate, 'plate')
+
+p3 <- plot_linear_correlation(normalized_methylation_pcas_with_purity, c('M values', 'RUV k6', 'RUV k10', 'RUV k14'), methylation_normalized_with_purity@colData$singscore_purity, 'purity')
+
+p4 <- plot_vector_correlation(normalized_methylation_pcas_with_purity, c('M values', 'RUV k6', 'RUV k10', 'RUV k14'), methylation_normalized_with_purity@colData$subtype,'subtye')
+
+gridExtra::grid.arrange(p1,p2, p3,p4, ncol = 2, nrow = 2)
+
+```
+
+```{r}
+transcriptome_normalized_with_purity <- SummarizedExperiment(assays = list(raw_counts = assays(transcriptome_normalized)[["HTseq_counts"]]),
+                                                            colData = transcriptome_normalized@colData,
+                                                            rowData = transcriptome_normalized@elementMetadata)
+
+
+transcriptome_normalized_with_purity <- RUVIIIPRPS::supervisedPRPS(transcriptome_normalized_with_purity,                                                      
+                                                                   'raw_counts',
+                                                     bio.variable = 'subtype',
+                                                     uv.variables = c('log2_lib_size','batch'), 
+                                                     batch.variable = 'batch', 
+                                                     min.sample.for.prps = 2,
+                                                     min.sample.per.batch = 3,
+                                                     apply.log = T,
+                                                     pseudo.count = 1,
+                                                     assess.se.obj = F,
+                                                     assess.cor.variables = F,
+                                                     save.se.obj = TRUE,
+                                                     verbose = T)
+
+transcriptome_normalized_with_purity1 <- RUVIIIPRPS::supervisedFindNCG(transcriptome_normalized_with_purity[,-which(transcriptome_normalized_with_purity@colData$batch %in% names(table(transcriptome_normalized_with_purity@colData$batch)[table(transcriptome_normalized_with_purity@colData$batch) <= 3]))], 'raw_counts',
+                                                     bio.variable = 'subtype',
+                                                     uv.variables = c('log2_lib_size','batch'), 
+                                                     no.ncg = 1000,
+                                                     apply.log = T,
+                                                     assess.se.obj = F,
+                                                     )
+
+
+replicate.data=t(do.call(cbind, transcriptome_normalized_with_purity1@metadata[['PRPS']][['supervised']]))
+
+transcriptome_normalized_with_purity <- RUVIIIPRPS::ruvIIIMultipleK(se.obj = transcriptome_normalized_with_purity, 
+                                                      assay.name = 'raw_counts',
+                                                      apply.log = T,
+                                                      k = c(4,6,8,10),
+                                                      ctl= transcriptome_normalized1@metadata[['NCG']],
+                                                      assess.se.obj = F, 
+                                                      replicate.data = replicate.data,
+                                                      save.se.obj = T,
+                                                      remove.na = 'measurements')
 
 
 ```
 
 
+```{r, fig.width= 12}
+
+normalized_transcriptome_pcas_with_purity <- lapply(assays(transcriptome_normalized_with_purity), run_PCA)
+# the pca takes a while so we saved it.
+# normalized_transcriptome_pcas_with_purity <- readRDS(file = 'Data/Computationally intensive objects/BRCA normalized methylation pcas with purity.rds')
+
+p1 <- plot_vector_correlation(normalized_transcriptome_pcas_with_purity, names(assays(transcriptome_normalized_with_purity)), transcriptome_normalized_with_purity@colData$batch, 'batch')
+
+p2 <- plot_linear_correlation(normalized_transcriptome_pcas_with_purity, names(assays(transcriptome_normalized_with_purity)), transcriptome_normalized_with_purity@colData$Purity_singscore, 'purity')
+
+p3 <- plot_vector_correlation(normalized_transcriptome_pcas_with_purity, names(assays(transcriptome_normalized_with_purity)), transcriptome_normalized_with_purity@colData$subtype, 'subtype')
+
+p4 <- plot_linear_correlation(normalized_transcriptome_pcas_with_purity, names(assays(transcriptome_normalized_with_purity)), transcriptome_normalized_with_purity@colData$log2_lib_size,'libsize')
+
+gridExtra::grid.arrange(p1,p2, p3,p4, ncol = 2, nrow = 2)
+
+```
+Save the normalized data
+
+```{r}
+
+# saveRDS(list(transcriptome_normalized, methylation_normalized, transcriptome_normalized_with_purity, methylation_normalized_with_purity), file = 'Data/TCGA_BRCA_Normalized_transcriptome&methylation.rds')
 
 
-
-
-
-
-
-
-
+```
 
 
 
