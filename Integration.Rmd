@@ -1,0 +1,52 @@
+---
+title: "Integration"
+author: "Neal Liu"
+date: "2024-02-19"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+load libraries
+
+```{r}
+
+library(CCA)
+library(MOFA2)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(ggExtra)
+library(cowplot)
+library(SummarizedExperiment)
+library(biomaRt)
+library(umap)
+library(Rtsne)
+library(MultiAssayExperiment)
+library(WGCNA)
+library(plotly)
+library(viridis)
+library(pheatmap)
+
+source('Helper_functions.R')
+
+```
+
+
+
+```{r}
+
+ov_data <- readRDS(file = 'Data/Normalized_transcriptome&methylation_TCGA_OV.rds')
+brca_data <- readRDS(file = 'Data/TCGA_BRCA_Normalized_transcriptome&methylation.rds')
+
+
+
+```
+
+
+
+
+
+
