@@ -34,16 +34,73 @@ source('Helper_functions.R')
 
 ```
 
+load data
 
+```{r}
+ov_data <- readRDS(file = 'Data/Normalized_transcriptome&methylation_TCGA_OV.rds')
+brca_data <- readRDS(file = 'Data/TCGA_BRCA_Normalized_transcriptome&methylation.rds')
+
+```
+
+Trying CCA with methylation & transcriptome, selecting features with high variance (median absolute deviation > 1. 
+for OV, this yields 5k genes for transcriptome and 6.9k for methylation. For BRCA, this yields 3.6k genes fro transcriptome and 4.2k sites for methylation.)
 
 ```{r}
 
-ov_data <- readRDS(file = 'Data/Normalized_transcriptome&methylation_TCGA_OV.rds')
-brca_data <- readRDS(file = 'Data/TCGA_BRCA_Normalized_transcriptome&methylation.rds')
+ov_selected_genes <- as.data.frame(apply(assay(ov_data[['normalized_transcriptome_raw_counts']],'RUV_K4_on_raw_counts'),1 ,FUN = mad))
+ov_selected_genes$Mean <- rowMeans(assay(ov_data[['normalized_transcriptome_raw_counts']],'RUV_K4_on_raw_counts'))
+ov_selected_genes <- ov_selected_genes[order(ov_selected_genes[,1], decreasing= T),]
+ov_selected_genes <- ov_selected_genes[1:5000,]
+
+ov_selected_methylations <- as.data.frame(apply(assay(ov_data[['normalized_methylation_M_values']],'RUV_K12_on_M_values'),1 ,FUN = mad))
+ov_selected_methylations$Mean <- rowMeans(assay(ov_data[['normalized_methylation_M_values']],'RUV_K12_on_M_values'))
+ov_selected_methylations <- ov_selected_methylations[order(ov_selected_methylations[,1], decreasing= T),]
+ov_selected_methylations <- ov_selected_methylations[1:5000,]
+
+
+
+brca_selected_genes <- apply(assay(brca_data[['normalized_transcriptome_raw_counts']],'RUV_K8_on_HTseq_counts'),1 ,FUN = mad) >= 1
+brca_selected_methylations <- apply(assay(brca_data[['normalized_methylation_M_values']],'RUV_K10_on_M_values'),1 ,FUN = mad) >= 1
+
+```
+
+```{r}
+ov_cancor <- stats::cancor(assay(ov_data[['normalized_transcriptome_raw_counts']],'RUV_K4_on_raw_counts')[rownames(ov_selected_genes),], 
+              assay(ov_data[['normalized_methylation_M_values']],'RUV_K12_on_M_values')[rownames(ov_selected_methylations),])
 
 
 
 ```
+
+
+
+```{r}
+brca_cancor <- stats::cancor(x= (t(assay(brca_data[['normalized_transcriptome_raw_counts']],'RUV_K8_on_HTseq_counts')[brca_selected_genes,]) %>% scale()),
+                             y= (t(assay(brca_data[['normalized_methylation_M_values']],'RUV_K10_on_M_values')[brca_selected_methylations,]) %>% scale()))
+
+
+brca_cca_component1_transcriptome <- t(assay(brca_data[['normalized_transcriptome_raw_counts']],'RUV_K8_on_HTseq_counts')[brca_selected_genes,])[,rownames(brca_cancor$xcoef)] %*% brca_cancor$xcoef[,2]
+brca_cca_component1_methylation <- t(assay(brca_data[['normalized_methylation_M_values']],'RUV_K10_on_M_values')[brca_selected_methylations,])[,rownames(brca_cancor$ycoef)] %*% brca_cancor$ycoef[,2]
+
+ggplot(mapping = aes(x= brca_cca_component1_transcriptome, y= brca_cca_component1_methylation, color = brca_data[['normalized_transcriptome_raw_counts']]@colData$subtype)) +
+  geom_point(alpha = 0.5) +
+  theme_minimal() +
+  labs(x='transcriptome component 2', 
+       y='methylation component 2',
+       color = 'Subtype') +
+  theme(axis.line = element_line(colour = "grey83", linewidth=1.1),
+          panel.border = element_rect(colour = "grey90", fill=NA, size=0.7),
+          panel.grid.major = element_line(color = "grey96"),
+          aspect.ratio = 1/1.1)
+
+```
+
+
+
+
+
+
+
 
 
 
