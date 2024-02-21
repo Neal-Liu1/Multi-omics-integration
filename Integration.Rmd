@@ -70,7 +70,7 @@ ov_methylation_data_to_use <- t(assay(ov_data_to_use[[2]],'RUV_K12_on_M_values')
 
 ov_cancor <- stats::cancor(ov_transcriptome_data_to_use, ov_methylation_data_to_use)
 
-component <- 1
+component <- 3
 
 ov_cca_component1_transcriptome <- ov_transcriptome_data_to_use[,rownames(ov_cancor$xcoef)] %*% ov_cancor$xcoef[,component]
 ov_cca_component1_methylation <- ov_methylation_data_to_use[,rownames(ov_cancor$ycoef)] %*% ov_cancor$ycoef[,component]
@@ -78,9 +78,10 @@ ov_cca_component1_methylation <- ov_methylation_data_to_use[,rownames(ov_cancor$
 ggplot(mapping = aes(x= ov_cca_component1_transcriptome, y= ov_cca_component1_methylation, color = ov_metadata$subtype)) +
   geom_point(alpha = 0.5) +
   theme_minimal() +
-  labs(x='transcriptome component 1', 
-       y='methylation component 1',
-       color = 'Subtype') +
+  labs(x=paste0('transcriptome component ', component), 
+       y=paste0('methylation component ', component),
+       color = 'Subtype',
+       title = paste0('Canonical correlation component ', component,' of ovarian cancer')) +
   theme(axis.line = element_line(colour = "grey83", linewidth=1.1),
           panel.border = element_rect(colour = "grey90", fill=NA, size=0.7),
           panel.grid.major = element_line(color = "grey96"),
@@ -106,7 +107,7 @@ print(paste0(sum(brca_selected_genes),', ',sum(brca_selected_methylations)))
 brca_cancor <- stats::cancor(x= brca_transcriptome_data_to_use,
                              y= brca_methylation_data_to_use)
 
-component <- 1
+component <- 2
 
 brca_cca_component1_transcriptome <- brca_transcriptome_data_to_use[,rownames(brca_cancor$xcoef)] %*% brca_cancor$xcoef[,component]
 brca_cca_component1_methylation <- brca_methylation_data_to_use[,rownames(brca_cancor$ycoef)] %*% brca_cancor$ycoef[,component]
@@ -114,9 +115,10 @@ brca_cca_component1_methylation <- brca_methylation_data_to_use[,rownames(brca_c
 ggplot(mapping = aes(x= brca_cca_component1_transcriptome, y= brca_cca_component1_methylation, color = brca_data[['normalized_transcriptome_raw_counts']]@colData$subtype)) +
   geom_point(alpha = 0.5) +
   theme_minimal() +
-  labs(x='transcriptome component 2', 
-       y='methylation component 2',
-       color = 'Subtype') +
+  labs(x=paste0('transcriptome component ', component), 
+       y=paste0('methylation component ', component),
+       color = 'Subtype',
+       title = paste0('Canonical correlation component ', component,' of breast cancer')) +
   theme(axis.line = element_line(colour = "grey83", linewidth=1.1),
           panel.border = element_rect(colour = "grey90", fill=NA, size=0.7),
           panel.grid.major = element_line(color = "grey96"),
@@ -124,9 +126,41 @@ ggplot(mapping = aes(x= brca_cca_component1_transcriptome, y= brca_cca_component
 
 ```
 
+Trying MOFA
 
 ```{r}
 
+#mofa_object <- create_mofa(data_list)
+#mofa_object <- prepare_mofa(mofa_object)
+#trained_mofa <- run_mofa(mofa_object, use_basilisk = TRUE)
+
+
+ov_mofa <- MOFA2::create_mofa(list(transcriptome = t(ov_transcriptome_data_to_use), 
+                                   methylation = t(ov_methylation_data_to_use)))
+model_opts <- MOFA2::get_default_model_options(ov_mofa)
+model_opts$num_factors <- 5
+ov_mofa <- MOFA2::prepare_mofa(ov_mofa, model_options = model_opts)
+ov_mofa <- MOFA2::run_mofa(ov_mofa, use_basilisk= T )
+
+```
+
+
+
+```{r, fig.width=15, fig.height= 6}
+
+p1 <- MOFA2::plot_variance_explained(ov_mofa)
+p2 <- MOFA2::plot_factor(ov_mofa, factors = c(1:5), color_by = ov_metadata$subtype)
+
+gridExtra::grid.arrange(p1, p2, ncol=2)
+
+```
+
+```{r, fig.height= 7, fig.width= 10}
+MOFA2::plot_factor(ov_mofa, factors = c(1:5), color_by = ov_metadata$subtype)
+
+```
+
+```{r}
 
 
 
