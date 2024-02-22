@@ -22,8 +22,6 @@ library(ggExtra)
 library(cowplot)
 library(SummarizedExperiment)
 library(biomaRt)
-library(umap)
-library(Rtsne)
 library(MultiAssayExperiment)
 library(WGCNA)
 library(plotly)
@@ -70,7 +68,7 @@ ov_methylation_data_to_use <- t(assay(ov_data_to_use[[2]],'RUV_K12_on_M_values')
 
 ov_cancor <- stats::cancor(ov_transcriptome_data_to_use, ov_methylation_data_to_use)
 
-component <- 3
+component <- 4
 
 ov_cca_component1_transcriptome <- ov_transcriptome_data_to_use[,rownames(ov_cancor$xcoef)] %*% ov_cancor$xcoef[,component]
 ov_cca_component1_methylation <- ov_methylation_data_to_use[,rownames(ov_cancor$ycoef)] %*% ov_cancor$ycoef[,component]
@@ -93,7 +91,7 @@ ggplot(mapping = aes(x= ov_cca_component1_transcriptome, y= ov_cca_component1_me
 
 
 ```{r}
-brca_selected_genes <- apply(assay(brca_data[['normalized_transcriptome_raw_counts']],'RUV_K8_on_HTseq_counts'),1 ,FUN = mad) >= 2.5
+brca_selected_genes <- apply(assay(brca_data[['normalized_transcriptome_raw_counts']],'RUV_K8_on_HTseq_counts'),1 ,FUN = mad) >= 2.35
 brca_selected_methylations <- apply(assay(brca_data[['normalized_methylation_M_values']],'RUV_K10_on_M_values'),1 ,FUN = mad) >= 2
 brca_transcriptome_data_to_use <- t(assay(brca_data[['normalized_transcriptome_raw_counts']],'RUV_K8_on_HTseq_counts')[brca_selected_genes,]) # %>% scale()
 brca_methylation_data_to_use <- t(assay(brca_data[['normalized_methylation_M_values']],'RUV_K10_on_M_values')[brca_selected_methylations,]) # %>% scale()
@@ -107,7 +105,7 @@ print(paste0(sum(brca_selected_genes),', ',sum(brca_selected_methylations)))
 brca_cancor <- stats::cancor(x= brca_transcriptome_data_to_use,
                              y= brca_methylation_data_to_use)
 
-component <- 2
+component <- 1
 
 brca_cca_component1_transcriptome <- brca_transcriptome_data_to_use[,rownames(brca_cancor$xcoef)] %*% brca_cancor$xcoef[,component]
 brca_cca_component1_methylation <- brca_methylation_data_to_use[,rownames(brca_cancor$ycoef)] %*% brca_cancor$ycoef[,component]
@@ -130,11 +128,6 @@ Trying MOFA
 
 ```{r}
 
-#mofa_object <- create_mofa(data_list)
-#mofa_object <- prepare_mofa(mofa_object)
-#trained_mofa <- run_mofa(mofa_object, use_basilisk = TRUE)
-
-
 ov_mofa <- MOFA2::create_mofa(list(transcriptome = t(ov_transcriptome_data_to_use), 
                                    methylation = t(ov_methylation_data_to_use)))
 model_opts <- MOFA2::get_default_model_options(ov_mofa)
@@ -155,8 +148,72 @@ gridExtra::grid.arrange(p1, p2, ncol=2)
 
 ```
 
-```{r, fig.height= 7, fig.width= 10}
-MOFA2::plot_factor(ov_mofa, factors = c(1:5), color_by = ov_metadata$subtype)
+```{r}
+
+MOFA2::plot_factors(ov_mofa, factors = c(1,2), alpha = 0.7, color_by = ov_metadata$subtype) +
+  theme_minimal() +
+  theme(axis.line = element_line(colour = "grey83", linewidth = 1.1),
+          panel.border = element_rect(colour = "grey90", fill=NA, size=0.7),
+          panel.grid.major = element_line(color = "grey96"),
+          aspect.ratio = 1/1.1)
+
+
+```
+
+
+```{r}
+rownames(brca_transcriptome_data_to_use) <- substr(rownames(brca_transcriptome_data_to_use), 9, 16)
+rownames(brca_methylation_data_to_use) <- substr(rownames(brca_methylation_data_to_use), 9, 16)
+brca_metadata <- brca_data[[1]]@colData
+
+print(paste0(sum(brca_selected_genes),', ',sum(brca_selected_methylations)))
+```
+
+```{r}
+brca_mofa <- MOFA2::create_mofa(list(transcriptome = t(brca_transcriptome_data_to_use),
+                                     methylation = t(brca_methylation_data_to_use)))
+model_params <- MOFA2::get_default_model_options(brca_mofa)
+model_params$num_factors <- 5
+brca_mofa <- MOFA2::prepare_mofa(brca_mofa, model_options = model_params)
+brca_mofa <- MOFA2::run_mofa(brca_mofa, use_basilisk = T)
+
+```
+
+```{r, fig.width=15, fig.height= 6}
+
+p1 <- MOFA2::plot_variance_explained(brca_mofa)
+p2 <- MOFA2::plot_factor(brca_mofa, factors = c(1:5), color_by = brca_metadata$subtype)
+
+gridExtra::grid.arrange(p1, p2, ncol=2)
+
+```
+
+```{r, fig.width=12, fig.height=5}
+
+p1 <- MOFA2::plot_factors(brca_mofa, factors= c(1,2), color_by = brca_metadata$subtype, alpha = 0.6) + 
+  theme_minimal() +
+  labs(title = 'MOFA factors for BRCA') +
+  theme(axis.line = element_line(colour = "grey83", linewidth = 1.1),
+          panel.border = element_rect(colour = "grey90", fill=NA, size=0.7),
+          panel.grid.major = element_line(color = "grey96"),
+          aspect.ratio = 1/1.1)
+
+brca_cca_component1_transcriptome <- brca_transcriptome_data_to_use[,rownames(brca_cancor$xcoef)] %*% brca_cancor$xcoef[,1]
+brca_cca_component1_methylation <- brca_methylation_data_to_use[,rownames(brca_cancor$ycoef)] %*% brca_cancor$ycoef[,2]
+
+p2 <- ggplot(mapping = aes(x= brca_cca_component1_transcriptome, y= brca_cca_component1_methylation, color = brca_data[['normalized_transcriptome_raw_counts']]@colData$subtype)) +
+  geom_point(alpha = 0.6) +
+  theme_minimal() +
+  labs(x=paste0('transcriptome component 1'), 
+       y=paste0('methylation component 2'),
+       color = 'Subtype',
+       title = 'CCA components for BRCA') +
+  theme(axis.line = element_line(colour = "grey83", linewidth=1.1),
+          panel.border = element_rect(colour = "grey90", fill=NA, size=0.7),
+          panel.grid.major = element_line(color = "grey96"),
+          aspect.ratio = 1/1.05)
+
+p1 + p2
 
 ```
 
@@ -164,7 +221,17 @@ MOFA2::plot_factor(ov_mofa, factors = c(1:5), color_by = ov_metadata$subtype)
 
 
 
+
 ```
+
+
+
+
+
+
+
+
+
 
 
 
