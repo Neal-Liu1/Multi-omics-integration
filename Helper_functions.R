@@ -687,12 +687,28 @@ compute_silhouette <- function(matrix, label_vector, run_dim_reduction = NULL, n
 
 
 
-compute_ARI <- function(){
+compute_ARI <- function(matrix, label_vector, run_dim_reduction = NULL, num_pcs = 3){
+  # taking a matrix of either raw data or dimensionally reduced data (PCA, umap or t-sne), calculate adjusted Rand index for each cluster.
+  # if you input raw data, dimensionality reduction will be done for you.
   
+  if(is.null(run_dim_reduction)){
+    if(nrow(matrix) != length(label_vector)){stop("Your matrix has unequal number of rows than the length of your label vector.
+                                                If you're inputting already dimensionally reduced data, please double 
+                                                check that your rows are samples and columns are scores.")}}
+  if(!is.null(run_dim_reduction)){
+    if(!(run_dim_reduction %in% c('pca','umap','tsne'))){stop("You inputted an invalid dimensionality reduction method. 
+                                                              You can choose from 'pca', 'umap' or 'tsne'.")}
+    if(run_dim_reduction == 'pca'){matrix <- run_PCA(matrix, pcs = num_pcs)$u}
+    if(run_dim_reduction == 'umap'){matrix <- umap(t(matrix))$layout}
+    if(run_dim_reduction == 'tsne'){matrix <- Rtsne(t(matrix))$Y}
+  }
   
+  computed_clusters <- mclust::Mclust(data = (matrix), 
+                                      x= mclust::mclustBIC(matrix))$classification
   
+  ARI_score <- mclust::adjustedRandIndex(computed_clusters, label_vector)
   
-  
+  return(ARI_score)
   
 }
 
