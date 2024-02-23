@@ -647,12 +647,18 @@ plot_GO_enrichment <- function(gene_name_vector, gene_id_type = 'ENSEMBL', ontol
 
 
 compute_silhouette <- function(matrix, label_vector, run_dim_reduction = NULL, num_pcs = 3, result_format = 'average'){
-  # taking a matrix of either raw data or dimensionally reduced data (PCA, umap or t-sne), calculate sihouette coefficient for each cluster.
+  # taking a matrix of either raw data or dimensionally reduced data (PCA, umap or t-sne), calculate silhouette coefficient for each cluster.
   # if you input raw data, dimensionality reduction will be done for you.
   
-  if(!(result_format %in% c('average','per_cluster'))){stop("Invalid results format. You can choose between 'average' or 'per_cluster'")}
+  if(!(result_format %in% c('average','per_cluster', 'plot'))){stop("Invalid results format. You can choose 
+                                                                    between 'average', 'per_cluster' or 'plot'")}
+  if(is.null(run_dim_reduction)){
+  if(nrow(matrix) != length(label_vector)){stop("Your matrix has unequal number of rows than the length of your label vector.
+                                                If you're inputting already dimensionally reduced data, please double 
+                                                check that your rows are samples and columns are scores.")}}
   if(!is.null(run_dim_reduction)){
-    if(!(run_dim_reduction %in% c('pca','umap','tsne'))){stop("You inputted an invalid dimensionality reduction method. You can choose from 'pca', 'umap' or 'tsne'.")}
+    if(!(run_dim_reduction %in% c('pca','umap','tsne'))){stop("You inputted an invalid dimensionality reduction method. 
+                                                              You can choose from 'pca', 'umap' or 'tsne'.")}
     if(run_dim_reduction == 'pca'){matrix <- run_PCA(matrix, pcs = num_pcs)$u}
     if(run_dim_reduction == 'umap'){matrix <- umap(t(matrix))$layout}
     if(run_dim_reduction == 'tsne'){matrix <- Rtsne(t(matrix))$Y}
@@ -663,10 +669,20 @@ compute_silhouette <- function(matrix, label_vector, run_dim_reduction = NULL, n
   
   if(result_format == 'average'){return(round(silhouette_result$avg.width, digits = 4))}
   if(result_format == 'per_cluster'){results <- data.frame(labels = levels(factor(label_vector)),
-                                                           n = as.vector(table(brca_metadata$subtype)),
+                                                           n = as.vector(table(label_vector)),
                                                            silhouette_score = round(silhouette_result$clus.avg.widths, digits=4))
   return(results)
   }
+  if(result_format == 'plot'){results <- data.frame(labels = levels(factor(label_vector)),
+                                                    n = as.vector(table(label_vector)),
+                                                    silhouette_score = round(silhouette_result$clus.avg.widths, digits=4))
+  
+    return(ggplot(results, aes(x=labels, y= silhouette_score, fill= labels))+
+             geom_bar(stat= 'Identity')+
+             theme_minimal()+
+             theme(axis.line = element_line(colour = "grey88", linewidth=1.1),
+                   panel.border = element_rect(colour = "grey90", fill=NA, size=0.7),
+                   panel.grid.major = element_line(color = "grey96")))}
 }
 
 
@@ -679,6 +695,14 @@ compute_ARI <- function(){
   
   
 }
+
+
+
+
+
+
+
+
 
 
 
