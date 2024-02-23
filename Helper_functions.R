@@ -646,18 +646,39 @@ plot_GO_enrichment <- function(gene_name_vector, gene_id_type = 'ENSEMBL', ontol
 
 
 
-combine_batches_by_avg_pc_score <- function(matrix, batch_vector, min_cluster_size = 2){
-  # combines batches by calculating each batch's average PC scores (first 10 PCs) and clustering. 
-  # requires the dynamicTreeCut package.
+compute_silhouette <- function(matrix, label_vector, run_dim_reduction = NULL, num_pcs = 3, result_format = 'average'){
+  # taking a matrix of either raw data or dimensionally reduced data (PCA, umap or t-sne), calculate sihouette coefficient for each cluster.
+  # if you input raw data, dimensionality reduction will be done for you.
+  
+  if(!(result_format %in% c('average','per_cluster'))){stop("Invalid results format. You can choose between 'average' or 'per_cluster'")}
+  if(!is.null(run_dim_reduction)){
+    if(!(run_dim_reduction %in% c('pca','umap','tsne'))){stop("You inputted an invalid dimensionality reduction method. You can choose from 'pca', 'umap' or 'tsne'.")}
+    if(run_dim_reduction == 'pca'){matrix <- run_PCA(matrix, pcs = num_pcs)$u}
+    if(run_dim_reduction == 'umap'){matrix <- umap(t(matrix))$layout}
+    if(run_dim_reduction == 'tsne'){matrix <- Rtsne(t(matrix))$Y}
+  }
+  
+  silhouette_result <- summary(cluster::silhouette(as.numeric(as.factor(label_vector)), 
+                                                   stats::dist(matrix)))
+  
+  if(result_format == 'average'){return(round(silhouette_result$avg.width, digits = 4))}
+  if(result_format == 'per_cluster'){results <- data.frame(labels = levels(factor(label_vector)),
+                                                           n = as.vector(table(brca_metadata$subtype)),
+                                                           silhouette_score = round(silhouette_result$clus.avg.widths, digits=4))
+  return(results)
+  }
+}
+
+
+
+compute_ARI <- function(){
+  
+  
   
   
   
   
 }
-
-
-
-
 
 
 
