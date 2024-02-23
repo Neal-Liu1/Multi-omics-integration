@@ -27,6 +27,7 @@ library(WGCNA)
 library(plotly)
 library(viridis)
 library(pheatmap)
+library(cluster)
 
 source('Helper_functions.R')
 
@@ -45,8 +46,8 @@ for OV, this yields 5k genes for transcriptome and 6.9k for methylation. For BRC
 
 ```{r}
 
-ov_selected_genes <- apply(assay(ov_data[['normalized_transcriptome_raw_counts']],'RUV_K4_on_raw_counts'),1 ,FUN = mad) >= 3.4
-ov_selected_methylations <- apply(assay(ov_data[['normalized_methylation_M_values']],'RUV_K12_on_M_values'),1 ,FUN = mad) >= 3.2
+ov_selected_genes <- apply(assay(ov_data[['normalized_transcriptome_raw_counts']],'RUV_K4_on_raw_counts'),1 ,FUN = mad) >= 1
+ov_selected_methylations <- apply(assay(ov_data[['normalized_methylation_M_values']],'RUV_K12_on_M_values'),1 ,FUN = mad) >= 1
 
 print(paste0(sum(ov_selected_genes),', ',sum(ov_selected_methylations)))
 
@@ -68,10 +69,10 @@ ov_methylation_data_to_use <- t(assay(ov_data_to_use[[2]],'RUV_K12_on_M_values')
 
 ov_cancor <- stats::cancor(ov_transcriptome_data_to_use, ov_methylation_data_to_use)
 
-component <- 4
+component <- 1
 
-ov_cca_component1_transcriptome <- ov_transcriptome_data_to_use[,rownames(ov_cancor$xcoef)] %*% ov_cancor$xcoef[,component]
-ov_cca_component1_methylation <- ov_methylation_data_to_use[,rownames(ov_cancor$ycoef)] %*% ov_cancor$ycoef[,component]
+ov_cca_component1_transcriptome <- ov_transcriptome_data_to_use[,rownames(ov_cancor$xcoef)] %*% ov_cancor$xcoef[,2]
+ov_cca_component1_methylation <- ov_methylation_data_to_use[,rownames(ov_cancor$ycoef)] %*% ov_cancor$ycoef[,1]
 
 ggplot(mapping = aes(x= ov_cca_component1_transcriptome, y= ov_cca_component1_methylation, color = ov_metadata$subtype)) +
   geom_point(alpha = 0.5) +
@@ -91,8 +92,8 @@ ggplot(mapping = aes(x= ov_cca_component1_transcriptome, y= ov_cca_component1_me
 
 
 ```{r}
-brca_selected_genes <- apply(assay(brca_data[['normalized_transcriptome_raw_counts']],'RUV_K8_on_HTseq_counts'),1 ,FUN = mad) >= 2.35
-brca_selected_methylations <- apply(assay(brca_data[['normalized_methylation_M_values']],'RUV_K10_on_M_values'),1 ,FUN = mad) >= 2
+brca_selected_genes <- apply(assay(brca_data[['normalized_transcriptome_raw_counts']],'RUV_K8_on_HTseq_counts'),1 ,FUN = mad) >= 2
+brca_selected_methylations <- apply(assay(brca_data[['normalized_methylation_M_values']],'RUV_K10_on_M_values'),1 ,FUN = mad) >= 1.7
 brca_transcriptome_data_to_use <- t(assay(brca_data[['normalized_transcriptome_raw_counts']],'RUV_K8_on_HTseq_counts')[brca_selected_genes,]) # %>% scale()
 brca_methylation_data_to_use <- t(assay(brca_data[['normalized_methylation_M_values']],'RUV_K10_on_M_values')[brca_selected_methylations,]) # %>% scale()
 
@@ -218,11 +219,54 @@ p1 + p2
 ```
 
 ```{r}
-
+plot_PCA(t(brca_transcriptome_data_to_use),'brca transcriptome', brca_metadata$subtype,'subtypes' )
 
 
 
 ```
+
+
+
+```{r}
+plot_PCA(t(brca_methylation_data_to_use),'brca methylation', brca_metadata$subtype,'subtypes')
+
+```
+
+```{r}
+
+View(umap(brca_transcriptome_data_to_use)$layout)
+View(Rtsne(brca_transcriptome_data_to_use)$Y)
+View(run_PCA(t(brca_transcriptome_data_to_use), pcs= 3)$u)
+View(dist((run_PCA(t(brca_transcriptome_data_to_use), pcs= 3)$u)))
+
+distance <- dist(Rtsne(brca_transcriptome_data_to_use)$Y)
+summary(silhouette(as.numeric(as.factor(brca_metadata$subtype)), distance))
+
+```
+
+
+
+```{r}
+
+compute_silhouette <- function(matrix, label_vector, run_dim_reduction = F, reduction_method = 'pca', num_pcs = 3){
+  # taking a matrix of either raw data or dimensionally reduced data (PCA, umap or t-sne), calculate sihouette coefficient for each cluster.
+  # if you input raw data, dimensionality reduction will be done for you.
+  
+  if(run_dim_reduction){
+    if(!(reduction_method %in% c('pca','umap','tsne'))){stop("You inputted an invalid dimensionality reduction method. You can choose from 'pca', 'umap' or 'tsne'.")}
+    if(reduction_method == 'pca'){matrix <- run_PCA(matrix, pcs = num_pcs)$u}
+    if(reduction_method == 'umap'){matrix <- umap(t(matrix))$layout}
+    if(reduction_method == 'tsne'){matrix <- Rtsne(t(matrix))$Y}
+  }
+  
+  
+  
+  
+}
+
+
+```
+
 
 
 
