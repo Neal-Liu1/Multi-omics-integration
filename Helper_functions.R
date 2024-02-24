@@ -682,7 +682,8 @@ compute_silhouette <- function(matrix, label_vector, run_dim_reduction = NULL, n
              theme_minimal()+
              theme(axis.line = element_line(colour = "grey88", linewidth=1.1),
                    panel.border = element_rect(colour = "grey90", fill=NA, size=0.7),
-                   panel.grid.major = element_line(color = "grey96")))}
+                   panel.grid.major = element_line(color = "grey96"),
+                   axis.text.x = element_text(angle = 45, hjust = 1)))}
 }
 
 
