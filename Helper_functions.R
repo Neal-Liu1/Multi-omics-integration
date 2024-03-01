@@ -391,6 +391,32 @@ plot_boxplot_categorical <- function(data_vector, category_vector, names, aspect
 
 
 
+plot_violin <- function(data_vector, category_vector, names, aspect_ratio=1.3){
+  # taking a vector of numerical scores and a vector of categorical variables and their names as vector, plot boxplot grouped by the categorical variables.
+  data <- as.data.frame(cbind(data_vector, category_vector))
+  colnames(data) <- names
+  
+  ggplot(data, aes(x=data[,2], y=as.numeric(data[,1]), fill=data[,2]))+
+    geom_violin()+
+    geom_beeswarm()+
+    labs(x = names[2], y = names[1], fill=names[2] )+
+    ggtitle(paste0('Boxplot of ',names[1],' grouped by ',names[2]))+
+    theme_minimal() +
+    theme(panel.border=element_rect(colour = "grey80", fill=NA, size=0.8),
+          aspect.ratio = 1/aspect_ratio,
+          axis.line = element_line(colour = "grey75", linewidth = 1.1),
+          panel.grid.major = element_line(color = "grey96"),
+          axis.text.x = element_text(size = 10,angle = 45,hjust = 1))
+  
+  
+}
+
+
+
+
+
+
+
 get_high_correlation_features <- function(matrix, variable_vector, threshold, method = 'pearson'){
   # taking a matrix and a vector (numerical), find features (rows) that have absolute correlation score (both positive and negative) greater than your set threshold value with your variable vector. 
   correlations <- lapply(1:nrow(matrix), function(x) {cor(as.vector(as.numeric(matrix[x,])),as.vector(variable_vector), method=method)})
@@ -716,7 +742,13 @@ compute_ARI <- function(matrix, label_vector, run_dim_reduction = NULL, num_pcs 
 
 
 
-
+compute_LISI <- function(){
+  
+  
+  
+  
+  
+}
 
 
 
