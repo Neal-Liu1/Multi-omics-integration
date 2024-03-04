@@ -391,23 +391,35 @@ plot_boxplot_categorical <- function(data_vector, category_vector, names, aspect
 
 
 
-plot_violin <- function(data_vector, category_vector, names, aspect_ratio=1.3){
-  # taking a vector of numerical scores and a vector of categorical variables and their names as vector, plot boxplot grouped by the categorical variables.
+plot_violin <- function(data_vector, category_vector, names, aspect_ratio=1.3, overlay_type = 'boxplot'){
+  # taking a vector of numerical scores and a vector of categorical variables and their names as vector, plot violin plot & swarm plot grouped by the categorical variables.
+  # requires the ggbeeswarm package.
+  if(!(overlay_type %in% c('boxplot','swarm', 'rug'))){stop("The overlay type you entered doesn't exist. You can choose from 'boxplot', 'swarm' and 'rug'.")}
+  
   data <- as.data.frame(cbind(data_vector, category_vector))
   colnames(data) <- names
   
-  ggplot(data, aes(x=data[,2], y=as.numeric(data[,1]), fill=data[,2]))+
+  p <- ggplot(data, aes(x=data[,2], y=as.numeric(data[,1]), fill=data[,2]))+
     geom_violin()+
     geom_beeswarm()+
     labs(x = names[2], y = names[1], fill=names[2] )+
-    ggtitle(paste0('Boxplot of ',names[1],' grouped by ',names[2]))+
+    ggtitle(paste0('Violin plot of ',names[1],' grouped by ',names[2]))+
     theme_minimal() +
     theme(panel.border=element_rect(colour = "grey80", fill=NA, size=0.8),
           aspect.ratio = 1/aspect_ratio,
           axis.line = element_line(colour = "grey75", linewidth = 1.1),
           panel.grid.major = element_line(color = "grey96"),
           axis.text.x = element_text(size = 10,angle = 45,hjust = 1))
+
+  if (overlay_type == 'swarm') {
+    final_plot <- p + geom_beeswarm()
+  } else if (overlay_type == 'boxplot') {
+    final_plot <- p + geom_boxplot()
+  } else if (overlay_type == 'rug') {
+    final_plot <- p + geom_rug()
+  }
   
+  return(final_plot)
   
 }
 
