@@ -401,7 +401,6 @@ plot_violin <- function(data_vector, category_vector, names, aspect_ratio=1.3, o
   
   p <- ggplot(data, aes(x=data[,2], y=as.numeric(data[,1]), fill=data[,2]))+
     geom_violin()+
-    geom_beeswarm()+
     labs(x = names[2], y = names[1], fill=names[2] )+
     ggtitle(paste0('Violin plot of ',names[1],' grouped by ',names[2]))+
     theme_minimal() +
