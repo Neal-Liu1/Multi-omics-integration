@@ -28,6 +28,7 @@ library(plotly)
 library(viridis)
 library(pheatmap)
 library(cluster)
+library(mclust)
 
 source('Helper_functions.R')
 
@@ -240,40 +241,154 @@ View(run_PCA(t(brca_transcriptome_data_to_use), pcs= 3)$u)
 View(dist((run_PCA(t(brca_transcriptome_data_to_use), pcs= 3)$u)))
 
 distance <- dist(Rtsne(brca_transcriptome_data_to_use)$Y)
-summary(silhouette(as.numeric(as.factor(brca_metadata$subtype)), distance))
+a <- data.frame(labels = levels(factor(brca_metadata$subtype)),
+                silhouette_score = summary(silhouette(as.numeric(as.factor(brca_metadata$subtype)), distance))$clus.avg.widths)
 
 ```
-
 
 
 ```{r}
+brca_subtype_silhouette <- compute_silhouette(t(brca_methylation_data_to_use), brca_metadata$subtype, run_dim_reduction = 'pca', 
+                   num_pcs = 2, result_format = 'per_cluster')
 
-compute_silhouette <- function(matrix, label_vector, run_dim_reduction = F, reduction_method = 'pca', num_pcs = 3){
-  # taking a matrix of either raw data or dimensionally reduced data (PCA, umap or t-sne), calculate sihouette coefficient for each cluster.
-  # if you input raw data, dimensionality reduction will be done for you.
-  
-  if(run_dim_reduction){
-    if(!(reduction_method %in% c('pca','umap','tsne'))){stop("You inputted an invalid dimensionality reduction method. You can choose from 'pca', 'umap' or 'tsne'.")}
-    if(reduction_method == 'pca'){matrix <- run_PCA(matrix, pcs = num_pcs)$u}
-    if(reduction_method == 'umap'){matrix <- umap(t(matrix))$layout}
-    if(reduction_method == 'tsne'){matrix <- Rtsne(t(matrix))$Y}
-  }
-  
-  
-  
-  
-}
+ggplot(data = brca_subtype_silhouette, aes(x= labels, y= silhouette_score, fill = labels))+
+  geom_bar(stat='identity')+
+  theme_minimal()+
+  theme(axis.line = element_line(colour = "grey88", linewidth=1.1),
+          panel.border = element_rect(colour = "grey90", fill=NA, size=0.7),
+          panel.grid.major = element_line(color = "grey96"),
+          aspect.ratio = 1/1.25)
 
+```
+
+```{r}
+compute_silhouette((brca_mofa@expectations$Z$group1[,1:2]), brca_metadata$subtype, result_format = 'plot')
+
+```
+
+```{r}
+compute_silhouette(data.frame(transcriptome = brca_transcriptome_data_to_use[,rownames(brca_cancor$xcoef)] %*% brca_cancor$xcoef[,1],
+                              methylation = brca_methylation_data_to_use[,rownames(brca_cancor$ycoef)] %*% brca_cancor$ycoef[,2]),
+                   brca_metadata$subtype, result_format = 'plot')
+
+```
+
+```{r}
+compute_silhouette(data.frame(transcriptome = brca_transcriptome_data_to_use[,rownames(brca_cancor$xcoef)] %*% brca_cancor$xcoef[,2],
+                              methylation = brca_methylation_data_to_use[,rownames(brca_cancor$ycoef)] %*% brca_cancor$ycoef[,1]),
+                   brca_metadata$subtype, result_format = 'plot')
 
 ```
 
 
+```{r}
+compute_ARI(brca_mofa@expectations$Z$group1[,1:2], brca_metadata$subtype, run_dim_reduction = NULL, 
+                   num_pcs = 2)
+
+```
+
+
+```{r}
+compute_ARI(matrix = data.frame(transcriptome = brca_transcriptome_data_to_use[,rownames(brca_cancor$xcoef)] %*% brca_cancor$xcoef[,2],
+                              methylation = brca_methylation_data_to_use[,rownames(brca_cancor$ycoef)] %*% brca_cancor$ycoef[,1]),
+                   label_vector = brca_metadata$subtype,
+            )
+
+```
+
+```{r}
+devtools::install_github("immunogenomics/lisi", type = 'binary')
+BiocManager::install("maftools")
+library(lisi)
+
+LISI_scores <- compute_lisi(run_PCA(t(brca_transcriptome_data_to_use)), 
+                            meta_data = as.data.frame(do.call(cbind, brca_metadata@listData)), 
+                            label_colnames = c('batch', 'subtype')) |> cbind.data.frame(dplyr::select(bm_data@meta.data, c('lane', 'donor', 'celltype.l2')))
+
+```
+
+```{r}
+unique_methylations <- strsplit(brca_data[[2]]@rowRanges@elementMetadata$gene, ';') %>% unlist() %>% unique()
+sum(!rownames(brca_data[[1]]) %in% unique_methylations)
+sum(!unique_methylations %in% rownames(brca_data[[1]]))
+
+rownames(brca_data[[1]])[!rownames(brca_data[[1]]) %in% unique_methylations]
+
+hist(assay(brca_data[[2]], 2)[!brca_data[[2]]@rowRanges@elementMetadata$gene %in% rownames(brca_data[[1]]),],
+     main = 'Methylations that are not in transcriptome')
+```
+
+```{r}
+hist(assay(brca_data[[2]], 2)[brca_data[[2]]@rowRanges@elementMetadata$gene %in% rownames(brca_data[[1]]),],
+     main = 'Methylations that are in transcriptome')
+```
+
+```{r}
+
+hist(assay(brca_data[[2]], 2)[grepl(';', brca_data[[2]]@rowRanges@elementMetadata$gene),],
+     main = 'Methylations that map to multiple genes')
+
+```
+
+```{r}
+brca_selected_genes_with_purity <- apply(assay(brca_data[[3]],3),1 ,FUN = mad) >= 2
+brca_selected_methylations_with_purity <- apply(assay(brca_data[[4]],4),1 ,FUN = mad) >= 1.75
+brca_transcriptome_data_to_use_with_purity <- t(assay(brca_data[[3]],3)[brca_selected_genes_with_purity,])
+brca_methylation_data_to_use_with_purity <- t(assay(brca_data[[4]],4)[brca_selected_methylations_with_purity,])
+
+print(paste0(sum(brca_selected_genes_with_purity),', ',sum(brca_selected_methylations_with_purity)))
+
+```
+
+```{r}
+
+rownames(brca_transcriptome_data_to_use_with_purity) <- substr(rownames(brca_transcriptome_data_to_use_with_purity), 9, 16)
+rownames(brca_methylation_data_to_use_with_purity) <- substr(rownames(brca_methylation_data_to_use_with_purity), 9, 16)
+
+brca_mofa_with_purity <- MOFA2::create_mofa(list(transcriptome = t(brca_transcriptome_data_to_use_with_purity),
+                                     methylation = t(brca_methylation_data_to_use_with_purity)))
+model_params <- MOFA2::get_default_model_options(brca_mofa_with_purity)
+model_params$num_factors <- 5
+brca_mofa_with_purity <- MOFA2::prepare_mofa(brca_mofa_with_purity, model_options = model_params)
+brca_mofa_with_purity <- MOFA2::run_mofa(brca_mofa_with_purity, use_basilisk = T)
+
+```
+
+```{r, fig.width=15, fig.height= 6}
+
+p1 <- MOFA2::plot_variance_explained(brca_mofa_with_purity)
+p2 <- MOFA2::plot_factor(brca_mofa_with_purity, factors = c(1:5), color_by = brca_metadata$subtype)
+
+gridExtra::grid.arrange(p1, p2, ncol=2)
+
+```
+
+```{r}
+hist(colSums(assay(brca_data[[1]],1)))
+hist(colSums(assay(brca_data[[1]],2)))
+
+```
+```{r}
+devtools::install_github("linnykos/tiltedCCA")
+library(tiltedCCA)
 
 
 
+```
+
+```{r}
+a <- sort(abs(brca_mofa@expectations$W$transcriptome[,1]), decreasing = T)
+b <- sort(abs(brca_mofa@expectations$W$methylation[,1]), decreasing = T)
+
+names(a[1:20])
+strsplit(brca_data[[2]]@rowRanges@elementMetadata$gene[rownames(brca_data[[2]]) %in% names(b[1:20])], ';') %>% unlist()
+
+base::intersect(names(a[1:20]), strsplit(brca_data[[2]]@rowRanges@elementMetadata$gene[rownames(brca_data[[2]]) %in% names(b[1:20])], ';') %>% unlist())
 
 
+plot_GO_enrichment(names(a[1:20]), gene_id_type = 'HGNC')
 
+```
 
 
 
