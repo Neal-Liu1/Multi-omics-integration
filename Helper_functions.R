@@ -423,6 +423,31 @@ plot_violin <- function(data_vector, category_vector, names, aspect_ratio=1.3, o
 
 
 
+plot_ridgeplot <- function(matrix, label_vector, title = 'Ridgeplot'){
+  # taking a matrix and a vector of categorical labels, plot ridgeplot for each category.
+  
+  data <- as.data.frame(t(matrix))
+  data <- tidyr::pivot_longer(data, cols = everything())
+  data$label <- rep(label_vector, nrow(matrix))
+  
+  p <- ggplot(data, aes(x=value, y=label, fill = label))+
+    geom_density_ridges2() +
+    labs()+
+    ggtitle(title)+
+    theme_minimal() +
+    theme(panel.border=element_rect(colour = "grey80", fill=NA, size=0.8),
+          # aspect.ratio = 1/aspect_ratio,
+          axis.line = element_line(colour = "grey75", linewidth = 1.1),
+          panel.grid.major = element_line(color = "grey96"),
+          axis.text.x = element_text(size = 10,angle = 45,hjust = 1))
+  
+  return(p)
+}
+
+
+
+
+
 
 
 get_high_correlation_features <- function(matrix, variable_vector, threshold, method = 'pearson'){
