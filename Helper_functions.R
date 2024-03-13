@@ -618,14 +618,14 @@ plot_UMAP <- function(matrix, metadata_vector, title = 'UMAP', aspect_ratio = 1/
   df$metadata = metadata_vector 
   
   if(!label_is_continuous){
-    ggplot(df, aes(x = UMAP1, y = UMAP2, color = metadata)) +
+    return(ggplot(df, aes(x = UMAP1, y = UMAP2, color = metadata)) +
       geom_point(size = 0.07) +
       ggtitle(title) +
       theme_minimal() +
       theme(axis.line = element_line(colour = "grey83", linewidth = 1.1),
             panel.border = element_rect(colour = "grey90", fill=NA, size=0.7),
             panel.grid.major = element_line(color = "grey96"),
-            aspect.ratio = aspect_ratio)
+            aspect.ratio = aspect_ratio))
   }
   if(label_is_continuous){
     ggplot(df, aes(x = UMAP1, y = UMAP2, color = metadata)) +
