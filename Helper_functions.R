@@ -598,20 +598,50 @@ ScheirerRayHare_test <- function(matrix, variable_1, variable_2, is.log=T, n.cor
 
 
 
-
-plot_UMAP <- function(matrix, metadata_vector, title = 'UMAP'){
+plot_UMAP <- function(matrix, metadata_vector, title = 'UMAP', aspect_ratio = 1/1.1, run_umap = T, label_is_continuous = F, 
+                      continuous_var_upper_lim = NULL){
   # taking a matrix and a vector of metadata, plot UMAP of the matrix colored by the groups in the metadata vector
   
-  umap_result = umap(t(matrix), method = 'umap-learn')
-  df = data.frame(umap_result$layout)
+  if(run_umap){
+    umap_result = umap(t(matrix))
+    df = data.frame(umap_result$layout)}
+  if(!run_umap){df <- as.data.frame(matrix)}
   colnames(df) = c("UMAP1", "UMAP2")
-  df$metadata = metadata_vector  # Replace with your batch or metadata vector
   
-  ggplot(df, aes(x = UMAP1, y = UMAP2, color = metadata)) +
-    geom_point() +
-    ggtitle(title)
+  if(!is.null(continuous_var_upper_lim)){
+    if(class(continuous_var_upper_lim) != 'numeric'){stop("You didn't enter a numerical value for the continous variable uppe limit. Please only enter numbers.")}
+    else(metadata_vector <- lapply(metadata_vector,
+                                   function(x) ifelse(x > continuous_var_upper_lim,
+                                                      continuous_var_upper_lim,
+                                                      x)) %>% unlist())}
+  
+  df$metadata = metadata_vector 
+  
+  if(!label_is_continuous){
+    ggplot(df, aes(x = UMAP1, y = UMAP2, color = metadata)) +
+      geom_point(size = 0.07) +
+      ggtitle(title) +
+      theme_minimal() +
+      theme(axis.line = element_line(colour = "grey83", linewidth = 1.1),
+            panel.border = element_rect(colour = "grey90", fill=NA, size=0.7),
+            panel.grid.major = element_line(color = "grey96"),
+            aspect.ratio = aspect_ratio)
+  }
+  if(label_is_continuous){
+    ggplot(df, aes(x = UMAP1, y = UMAP2, color = metadata)) +
+      geom_point(size = 0.07) +
+      scale_fill_viridis() +
+      scale_color_viridis() +
+      ggtitle(title) +
+      theme_minimal() +
+      theme(axis.line = element_line(colour = "grey83", linewidth = 1.1),
+            panel.border = element_rect(colour = "grey90", fill=NA, size=0.7),
+            panel.grid.major = element_line(color = "grey96"),
+            aspect.ratio = 1/1.05)
+  }
   
 }
+
 
 
 
