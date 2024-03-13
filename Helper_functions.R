@@ -599,17 +599,17 @@ ScheirerRayHare_test <- function(matrix, variable_1, variable_2, is.log=T, n.cor
 
 
 
-plot_UMAP <- function(matrix, metadata_vector, matrix_name, metadata_name){
+plot_UMAP <- function(matrix, metadata_vector, title = 'UMAP'){
   # taking a matrix and a vector of metadata, plot UMAP of the matrix colored by the groups in the metadata vector
   
-  umap_result = umap(t(matrix))
+  umap_result = umap(t(matrix), method = 'umap-learn')
   df = data.frame(umap_result$layout)
   colnames(df) = c("UMAP1", "UMAP2")
   df$metadata = metadata_vector  # Replace with your batch or metadata vector
   
   ggplot(df, aes(x = UMAP1, y = UMAP2, color = metadata)) +
     geom_point() +
-    ggtitle(paste0('UMAP of ',matrix_name,' grouped by ',metadata_name))
+    ggtitle(title)
   
 }
 
