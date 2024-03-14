@@ -380,17 +380,36 @@ library(tiltedCCA)
 a <- sort(abs(brca_mofa@expectations$W$transcriptome[,1]), decreasing = T)
 b <- sort(abs(brca_mofa@expectations$W$methylation[,1]), decreasing = T)
 
-names(a[1:20])
-strsplit(brca_data[[2]]@rowRanges@elementMetadata$gene[rownames(brca_data[[2]]) %in% names(b[1:20])], ';') %>% unlist()
+names(a[1:30])
+methylation_names <- strsplit(brca_data[[2]]@rowRanges@elementMetadata$gene[rownames(brca_data[[2]]) %in% names(b[1:30])], ';') %>% unlist()
 
-base::intersect(names(a[1:20]), strsplit(brca_data[[2]]@rowRanges@elementMetadata$gene[rownames(brca_data[[2]]) %in% names(b[1:20])], ';') %>% unlist())
+base::intersect(names(a[1:30]), methylation_names)
 
+```
 
-plot_GO_enrichment(names(a[1:20]), gene_id_type = 'HGNC')
+```{r, fig.height= 6}
+library(ggridges)
+
+top_methylations_in_transcriptome <- methylation_names[methylation_names %in% rownames(assay(brca_data[[1]],4))]
+
+plot_ridgeplot(t(assay(brca_data[[1]],4)[top_methylations_in_transcriptome,]), 
+               top_methylations_in_transcriptome,
+               title = 'Corresponding transcripts of the top methylations',
+               aspect_ratio = 1/0.9)
+
 
 ```
 
 
+
+```{r, fig.height= 7}
+plot_ridgeplot(t(assay(brca_data[[2]],5)[which(rownames(assay(brca_data[[2]],5)) %in% names(b[1:30])),]),
+               label_vector = brca_data[[2]]@rowRanges$gene[which(rownames(assay(brca_data[[2]],5)) %in% names(b[1:30]))],
+               aspect_ratio = 1/0.6) +
+  labs(y= ('Methylation gene mapping'), x=('M value'), title = 'Methylation M values of the top methylations')+
+  coord_cartesian(xlim = c(-12,9))
+
+```
 
 
 
