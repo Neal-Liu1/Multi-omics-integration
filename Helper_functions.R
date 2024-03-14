@@ -428,7 +428,7 @@ plot_ridgeplot <- function(matrix, label_vector, title = 'Ridgeplot'){
   
   data <- as.data.frame(t(matrix))
   data <- tidyr::pivot_longer(data, cols = everything())
-  data$label <- rep(label_vector, nrow(matrix))
+  data$label <- rep(label_vector, each = nrow(matrix))
   
   p <- ggplot(data, aes(x=value, y=label, fill = label))+
     geom_density_ridges2() +
