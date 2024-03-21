@@ -32,6 +32,8 @@ library(mclust)
 
 source('Helper_functions.R')
 
+base::set.seed(42)
+
 ```
 
 load data
@@ -248,12 +250,13 @@ a <- data.frame(labels = levels(factor(brca_metadata$subtype)),
 
 
 ```{r}
-brca_subtype_silhouette <- compute_silhouette(t(brca_methylation_data_to_use), brca_metadata$subtype, run_dim_reduction = 'pca', 
+brca_subtype_silhouette <- compute_silhouette(t(brca_transcriptome_data_to_use), brca_metadata$subtype, run_dim_reduction = 'pca', 
                    num_pcs = 2, result_format = 'per_cluster')
 
 ggplot(data = brca_subtype_silhouette, aes(x= labels, y= silhouette_score, fill = labels))+
   geom_bar(stat='identity')+
   theme_minimal()+
+  labs(title = 'Silhouette scores for filtered transcriptome')+
   theme(axis.line = element_line(colour = "grey88", linewidth=1.1),
           panel.border = element_rect(colour = "grey90", fill=NA, size=0.7),
           panel.grid.major = element_line(color = "grey96"),
@@ -284,6 +287,25 @@ compute_silhouette(data.frame(transcriptome = brca_transcriptome_data_to_use[,ro
 ```{r}
 compute_ARI(brca_mofa@expectations$Z$group1[,1:2], brca_metadata$subtype, run_dim_reduction = NULL, 
                    num_pcs = 2)
+
+```
+```{r}
+
+all_silhouette_scores <- parallel::mclapply(list(run_PCA(t(brca_transcriptome_data_to_use), pcs = 5)$u,
+                                                 run_PCA(t(brca_methylation_data_to_use), pcs = 5)$u,
+                                                 brca_mofa@expectations$Z$group1),
+                                            function(x){compute_silhouette(x, brca_metadata$subtype, 
+                                                                           result_format = 'per_cluster')})
+
+all_silhouette_scores <- do.call(rbind, all_silhouette_scores)
+all_silhouette_scores$algorithm <- rep(c('filtered transcriptome PCA', 'filtered methylation PCA', 'MOFA'), each = 6)
+
+plot_boxplot_categorical(all_silhouette_scores$silhouette_score, 
+            all_silhouette_scores$algorithm, 
+            names = c('Silhouette scores per subtype', 'algorithm')) +
+  theme(axis.text.x = element_text(size = 10,angle = 45,hjust = 1)) +
+  theme(legend.position = 'None') +
+  labs(title = 'Silhouette scores for components 1 to 5', x=NULL)
 
 ```
 
@@ -364,10 +386,27 @@ gridExtra::grid.arrange(p1, p2, ncol=2)
 ```
 
 ```{r}
+p1 <- MOFA2::plot_factors(brca_mofa_with_purity, factors= c(1,2), color_by = brca_metadata$subtype, alpha = 0.6) + 
+  theme_minimal() +
+  labs(title = 'MOFA factors for BRCA') +
+  theme(axis.line = element_line(colour = "grey83", linewidth = 1.1),
+          panel.border = element_rect(colour = "grey90", fill=NA, size=0.7),
+          panel.grid.major = element_line(color = "grey96"),
+          aspect.ratio = 1/1.1)
+
+p1
+```
+
+
+
+```{r}
 hist(colSums(assay(brca_data[[1]],1)))
 hist(colSums(assay(brca_data[[1]],2)))
 
 ```
+
+
+
 ```{r}
 devtools::install_github("linnykos/tiltedCCA")
 library(tiltedCCA)
@@ -403,6 +442,37 @@ plot_ridgeplot(t(assay(brca_data[[1]],4)[top_methylations_in_transcriptome,]),
 
 
 ```{r, fig.height= 7}
+plot_ridgeplot(t(assay(brca_data[[2]],5)[which(rownames(assay(brca_data[[2]],5)) %in% names(b[1:30])), 
+                                         which(brca_data[[2]]@colData$tissue_type == 'Normal')]),
+               label_vector = brca_data[[2]]@rowRanges$gene[which(rownames(assay(brca_data[[2]],5)) %in% names(b[1:30]))],
+               aspect_ratio = 1/0.6) +
+  labs(y= ('Methylation gene mapping'), x=('M value'), title = 'Methylation M values of the top methylations')+
+  coord_cartesian(xlim = c(-12,9))
+
+```
+
+```{r, fig.height= 7}
+plot_ridgeplot(t(assay(brca_data[[2]],5)[which(rownames(assay(brca_data[[2]],5)) %in% names(b[1:30])), 
+                                         which(brca_data[[2]]@colData$subtype == 'Basal')]),
+               label_vector = brca_data[[2]]@rowRanges$gene[which(rownames(assay(brca_data[[2]],5)) %in% names(b[1:30]))],
+               aspect_ratio = 1/0.6) +
+  labs(y= ('Methylation gene mapping'), x=('M value'), title = 'Methylation M values of the top methylations')+
+  coord_cartesian(xlim = c(-12,9))
+
+```
+
+```{r, fig.height= 7}
+plot_ridgeplot(t(assay(brca_data[[2]],5)[which(rownames(assay(brca_data[[2]],5)) %in% names(b[1:30])), 
+                                         which(brca_data[[2]]@colData$subtype == 'Basal')]),
+               label_vector = brca_data[[2]]@rowRanges$gene[which(rownames(assay(brca_data[[2]],5)) %in% names(b[1:30]))],
+               aspect_ratio = 1/0.6) +
+  labs(y= ('Methylation gene mapping'), x=('M value'), title = 'Methylation M values of the top methylations')+
+  coord_cartesian(xlim = c(-12,9))
+
+```
+
+
+```{r, fig.height= 7}
 plot_ridgeplot(t(assay(brca_data[[2]],5)[which(rownames(assay(brca_data[[2]],5)) %in% names(b[1:30])),]),
                label_vector = brca_data[[2]]@rowRanges$gene[which(rownames(assay(brca_data[[2]],5)) %in% names(b[1:30]))],
                aspect_ratio = 1/0.6) +
@@ -410,6 +480,79 @@ plot_ridgeplot(t(assay(brca_data[[2]],5)[which(rownames(assay(brca_data[[2]],5))
   coord_cartesian(xlim = c(-12,9))
 
 ```
+
+
+```{r, fig.width = 8}
+plot_GO_enrichment(brca_data[[1]]@elementMetadata$EnsemblGene_ids[which(brca_data[[1]]@elementMetadata$hgnc_symbol_BioMart %in% names(a[1:30]))],
+                   'ENSEMBL',
+)+ labs(title = 'GO enrichment of top 30 transcripts in MOFA compoennt 1')
+
+```
+
+```{r, fig.width= 8}
+p <- plot_GO_enrichment(brca_data[[1]]@elementMetadata$EnsemblGene_ids[which(brca_data[[1]]@elementMetadata$hgnc_symbol_BioMart %in% methylation_names)],
+                   'ENSEMBL',
+)
+
+p + labs(title = 'GO enrichment of top 30 methylations')
+```
+
+
+
+```{r, fig.height= 6}
+a <- sort(abs(brca_mofa_with_purity@expectations$W$transcriptome[,1]), decreasing = T)
+b <- sort(abs(brca_mofa_with_purity@expectations$W$methylation[,1]), decreasing = T)
+
+methylation_names <- strsplit(brca_data[[3]]@elementMetadata$gene_name.[rownames(brca_data[[4]]) %in% names(b[1:30])], ';') %>% unlist()
+
+top_methylations_in_transcriptome <- methylation_names[methylation_names %in% rownames(assay(brca_data[[3]],2))]
+
+plot_ridgeplot(t(assay(brca_data[[3]],2)[top_methylations_in_transcriptome,]), 
+               top_methylations_in_transcriptome,
+               title = 'Corresponding transcripts of the top methylations',
+               aspect_ratio = 1/0.9)
+
+
+```
+
+```{r}
+plot_ridgeplot(t(assay(brca_data[[4]],4)[which(rownames(brca_data[[3]]) %in% names(b[1:30])),]),
+               label_vector = brca_data[[2]]@rowRanges$gene[which(rownames(assay(brca_data[[3]],2)) %in% names(b[1:30]))],
+               aspect_ratio = 1/0.6) +
+  labs(y= ('Methylation gene mapping'), x=('M value'), title = 'Methylation M values of the top methylations')+
+  coord_cartesian(xlim = c(-12,9))
+
+```
+
+
+```{r}
+
+plot_PCA((assay(brca_data[[1]],4)[names(a[1:30]),]), 'top MOFA factor 1 transcripts',brca_metadata$subtype, 'subtype')
+
+```
+
+```{r}
+
+plot_PCA((assay(brca_data[[2]],5)[names(b[1:30]),]), 'top MOFA factor 1 methylations',brca_metadata$subtype, 'subtype')
+
+
+
+```
+
+```{r}
+plot_ridgeplot(assay(brca_data[[1]],4)['TMEM132C',], brca_metadata$subtype)
+
+
+```
+
+```{r}
+
+
+
+
+
+```
+
 
 
 
