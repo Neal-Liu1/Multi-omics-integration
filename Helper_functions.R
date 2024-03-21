@@ -470,7 +470,7 @@ get_high_correlation_features <- function(matrix, variable_vector, threshold, me
 
 
 
-ftest <- function(matrix, variable, is.log=T, n.cores=8){
+ftest <- function(matrix, variable, is.log=T, n.cores=8, sort_by = NULL){
   # taking a matrix of data and a vector of categorical variables, calculate F and P values for each feature.
   # Note that your data is first log transformed. If you set is.log =F, we'll transform it first and then do the ANOVA.
   
@@ -487,6 +487,13 @@ ftest <- function(matrix, variable, is.log=T, n.cores=8){
     PValue = unlist(lapply(f.test, function(x) {x$`Pr(F)`[2]})),
     Adj.PValue = p.adjust(unlist(lapply(f.test, function(x) {x$`Pr(F)`[2]})), method = 'BH'),
     Mean = round(average.exp, digits = 2))
+  
+  if (!is.null(sort_by)) {
+    if (!sort_by %in% colnames(f.test)){
+      stop("The column you want to sort by doesn't exist. You can choose from:'FValue', 'PValue', 'Adj.PValue', 'Mean'.")}
+    else {f.test <- f.test[order(f.test[[sort_by]]),]}
+  }
+  
   return(f.test)
 }
 
@@ -737,7 +744,8 @@ plot_GO_enrichment <- function(gene_name_vector, gene_id_type = 'ENSEMBL', ontol
 
 
 compute_silhouette <- function(matrix, label_vector, run_dim_reduction = NULL, num_pcs = 3, result_format = 'average'){
-  # taking a matrix of either raw data or dimensionally reduced data (PCA, umap or t-sne), calculate silhouette coefficient for each cluster.
+  # taking a matrix of either raw data (rows are featues and columns are samples) 
+  # or dimensionally reduced data (PCA, umap or t-sne) (rows are samples and columns are components), calculate silhouette coefficient for each cluster.
   # if you input raw data, dimensionality reduction will be done for you.
   
   if(!(result_format %in% c('average','per_cluster', 'plot'))){stop("Invalid results format. You can choose 
