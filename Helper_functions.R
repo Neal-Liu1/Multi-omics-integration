@@ -35,7 +35,7 @@ replace_all_NAs_with_row_means <- function(matrix){
 
 run_PCA <- function(matrix, pcs= 10){
   # compute PCA for a set number of PCs using BiocSingular SVD. 
-  pca_obj <- list(BiocSingular::runSVD(t(matrix),k=pcs,center=T))[[1]]
+  pca_obj <- list(BiocSingular::runSVD(t(matrix),k=pcs,center=T, BSPARAM = bsparam()))[[1]]
   colnames(pca_obj$u) <- paste0('PC',1:pcs)
   
   return(pca_obj)
@@ -45,18 +45,18 @@ run_PCA <- function(matrix, pcs= 10){
 
 
 
-plot_PCA <- function(matrix, dataset_name, labels, label_name, pcs= c(1,2), is_pca_obj= F, is_continuous = F){
+plot_PCA <- function(matrix, dataset_name, labels, label_name, pcs= c(1,2), is_pca_obj= F, is_continuous = F, pcs_to_compute = 10){
   # plots a PCA of the data coloured by labels
   
   if(is_pca_obj){pca_data <- matrix}
-  else{pca_data <- list(BiocSingular::runSVD(t(matrix),k=10,center=T))[[1]]}
+  else{pca_data <- run_PCA(matrix, pcs = pcs_to_compute)}
   
   percentage  <- pca_data$d ^ 2 / sum(pca_data$d ^ 2) * 100
   percentage  <- sapply(seq_along(percentage), function(i)
     {round(percentage [i], 1)})
   
   data <- data.frame(pca_data$u)
-  colnames(data) <- paste0('PC',c(1:10))
+  colnames(data) <- paste0('PC',c(1:pcs_to_compute))
   data$label <- labels
   
   first_pc <- sym(paste0('PC',pcs[1]))
