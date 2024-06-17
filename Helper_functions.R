@@ -606,8 +606,8 @@ ScheirerRayHare_test <- function(matrix, variable_1, variable_2, is.log=T, n.cor
 
 
 
-plot_UMAP <- function(matrix, metadata_vector, title = 'UMAP', aspect_ratio = 1/1.1, run_umap = T, label_is_continuous = F, 
-                      continuous_var_upper_lim = NULL){
+plot_UMAP <- function(matrix, metadata_vector, title = 'UMAP', aspect_ratio = 1/1, run_umap = T, label_is_continuous = F, 
+                      continuous_var_upper_lim = NULL, alpha = 1){
   # taking a matrix and a vector of metadata, plot UMAP of the matrix colored by the groups in the metadata vector
   
   if(run_umap){
@@ -626,28 +626,49 @@ plot_UMAP <- function(matrix, metadata_vector, title = 'UMAP', aspect_ratio = 1/
   df$metadata = metadata_vector 
   
   if(!label_is_continuous){
-    return(ggplot(df, aes(x = UMAP1, y = UMAP2, color = metadata)) +
-      geom_point(size = 0.07) +
+    centroids <- aggregate(cbind(UMAP1, UMAP2) ~ metadata, df, mean)
+    p <- ggplot(df, aes(x = UMAP1, y = UMAP2, color = metadata)) +
+      geom_point(size = 0.07, alpha = alpha) +
       ggtitle(title) +
       theme_minimal() +
-      theme(axis.line = element_line(colour = "grey83", linewidth = 1.1),
-            panel.border = element_rect(colour = "grey90", fill=NA, size=0.7),
-            panel.grid.major = element_line(color = "grey96"),
-            aspect.ratio = aspect_ratio))
+      theme(axis.line = element_line(colour = "grey50", linewidth = 0.9),
+            panel.border = element_blank(),  #element_rect(colour = "grey90", fill=NA, size=0.7),
+            panel.grid.major = element_blank(),  #element_line(color = "grey96"),
+            panel.grid.minor = element_blank(),
+            aspect.ratio = aspect_ratio,
+            legend.position = "none")+
+      geom_text(data = centroids, aes(label = metadata), size = 3, color = "black", hjust = 0.5, vjust = 0.5)
   }
+  
   if(label_is_continuous){
     ggplot(df, aes(x = UMAP1, y = UMAP2, color = metadata)) +
-      geom_point(size = 0.07) +
+      geom_point(size = 0.07, alpha = alpha) +
       scale_fill_viridis() +
       scale_color_viridis() +
       ggtitle(title) +
       theme_minimal() +
-      theme(axis.line = element_line(colour = "grey83", linewidth = 1.1),
+      theme(axis.line = element_line(colour = "grey50", linewidth = 0.9),
             panel.border = element_rect(colour = "grey90", fill=NA, size=0.7),
             panel.grid.major = element_line(color = "grey96"),
-            aspect.ratio = 1/1.05)
+            aspect.ratio = 1/1.05)  
   }
   
+  if(!label_is_continuous){
+    xdens <- axis_canvas(p, axis = "x")+
+      geom_density(df, mapping = aes(x = UMAP1, fill = metadata_vector), color= 'grey55', alpha = 0.50, size = 0.2) +
+      theme(legend.position = "none")
+    
+    ydens <- axis_canvas(p, axis = "y", coord_flip = TRUE) +
+      geom_density(df, mapping = aes(x = UMAP2, fill = metadata_vector), color= 'grey55', alpha = 0.50, size = 0.2) +
+      theme(legend.position = "none")+
+      coord_flip()
+  }
+  
+  p1 <- insert_xaxis_grob(p, xdens, grid::unit(.2, "null"), position = "top")
+  p2 <- insert_yaxis_grob(p1, ydens, grid::unit(.2, "null"), position = "right")
+  pList <- ggdraw(p2)
+  
+  return(pList)
 }
 
 
