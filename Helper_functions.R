@@ -35,12 +35,11 @@ replace_all_NAs_with_row_means <- function(matrix){
 
 run_PCA <- function(matrix, pcs= 10){
   # compute PCA for a set number of PCs using BiocSingular SVD. 
-  pca_obj <- list(BiocSingular::runSVD(t(matrix),k=pcs,center=T, BSPARAM = bsparam()))[[1]]
+  pca_obj <- list(BiocSingular::runSVD(t(matrix),k=pcs,center=T, BSPARAM =BiocSingular::bsparam()))[[1]]
   colnames(pca_obj$u) <- paste0('PC',1:pcs)
   
   return(pca_obj)
 }
-
 
 
 
