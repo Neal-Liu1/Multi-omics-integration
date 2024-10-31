@@ -328,7 +328,7 @@ plot_vector_correlation <- function(data_list, dataset_names, variable_vector, v
   # taking a list of pca objects, a vector of categorical values (in order) of the values you want to compare, and number of PCs, plot the correlation R^2 values
   
   if (length(data_list)>30) {stop('Your data must be a list. Did you accidentally use c() instead of list()?')}
-  
+  if (!class(variable_vector) %in% c('factor', 'character')){stop('Your variable is not a factor or character.')}
   if (is.list(dataset_names)) {stop('Your dataset names cannot be a list. Has to be a vector. use c() instead of list()!')}
   
   if(!is.pca.obj){pca_list <- lapply(data_list, function(x) {run_PCA(x,pcs = num_pcs)})}
