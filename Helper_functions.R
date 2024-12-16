@@ -424,7 +424,7 @@ plot_violin <- function(data_vector, category_vector, names, aspect_ratio=1.3, o
 
 plot_ridgeplot <- function(matrix, label_vector, title = 'Ridgeplot', aspect_ratio = 1/1){
   # taking a matrix and a vector of categorical labels, plot ridgeplot for each category.
-  
+  require('ggridges')
   data <- as.data.frame(t(matrix))
   data <- tidyr::pivot_longer(data, cols = everything())
   data$label <- rep(label_vector, each = nrow(matrix))
