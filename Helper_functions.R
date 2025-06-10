@@ -833,14 +833,59 @@ compute_ARI <- function(matrix, label_vector, run_dim_reduction = NULL, num_pcs 
 
 
 
-
-compute_LISI <- function(){
+ScheirerRayHare_test <- function(data, variable_1, variable_2, is.log = TRUE, pval_adj_method = 'BH', sort_by = NULL) {
+  # Non-parametric version of the two-way ANOVA. Requires the rcompanion package.
   
+  if (!requireNamespace("rcompanion", quietly = TRUE)) {
+    stop("The rcompanion package is needed for this function to work. Please install it.", call. = FALSE)
+  }
   
+  if (!is.log) {
+    data <- log2(data + 1)
+  }
   
+  means <- rowMeans(data)
+  results <- data.frame(
+    Var1_chisq = numeric(),
+    Var1_PValue = numeric(),
+    Var1_Adj_PValue = numeric(),
+    Var2_chisq = numeric(),
+    Var2_PValue = numeric(),
+    Var2_Adj_PValue = numeric(),
+    Interaction_chisq = numeric(),
+    Interaction_PValue = numeric(),
+    Interaction_Adj_PValue = numeric(),
+    Mean = numeric()
+  )
   
+  if (!is.null(sort_by)) {
+    if (!(sort_by %in% colnames(results))) {
+      stop("The column you want to sort by doesn't exist. You can choose from: 'Var1_chisq', 'Var1_PValue', 'Var1_Adj_PValue', 'Var2_chisq', 'Var2_PValue', 'Var2_Adj_PValue', 'Interaction_chisq', 'Interaction_PValue', 'Interaction_Adj_PValue', 'Mean'.")
+    }}
   
+  for (x in 1:nrow(data)) {
+    ranks <- rank(as.numeric(data[x, ]))
+    data_frame <- data.frame(ranks = ranks, variable_1 = variable_1, variable_2 = variable_2)
+    model <- rcompanion::scheirerRayHare(ranks ~ variable_1 * variable_2, data = data_frame)
+    
+    results[x, "Var1_chisq"] <- round(model$H[1], digits = 4)
+    results[x, "Var1_PValue"] <- model$p.value[1]
+    results[x, "Var2_chisq"] <- round(model$H[2], digits = 4)
+    results[x, "Var2_PValue"] <- model$p.value[2]
+    results[x, "Interaction_chisq"] <- round(model$H[3], digits = 4)
+    results[x, "Interaction_PValue"] <- model$p.value[3]
+    results[x, "Mean"] <- round(means[x], digits = 2)
+  }
+  
+  results$Var1_Adj_PValue <- p.adjust(results$Var1_PValue, method = pval_adj_method)
+  results$Var2_Adj_PValue <- p.adjust(results$Var2_PValue, method = pval_adj_method)
+  results$Interaction_Adj_PValue <- p.adjust(results$Interaction_PValue, method = pval_adj_method)
+  rownames(results) <- rownames(data)
+  
+  results <- results[order(results[[sort_by]]), ]
+  return(results)
 }
+
 
 
 
