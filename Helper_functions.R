@@ -537,13 +537,11 @@ ANOVA_2way <- function(matrix, variable_1, variable_2, is.log=T, n.cores=8, pval
 
 
 
-
-
 wilcoxon_test <- function(matrix, variable, is.log=T, n.cores = 8){
   # Taking a matrix of data and a vector of categorical variables, do wilcox test and calculate P values & adjusted Pvalues for each feature.
   # Note that if you put is.log=False, we'll transform it first and then do the ANOVA.
+  variable <- as.factor(variable)
   
-  if (!is.matrix(matrix)){stop('Inevitable in retrospect. Please uninstall R and quit bioinformatics.')}#paste0("We detect your data is a '",type(matrix),"' not a matrix. Please double check"))}
   if(is.log){expr.data <- matrix}
   else{expr.data <- log(matrix + 1)}
   pval <- parallel::mclapply(row.names(expr.data), function(x) stats::wilcox.test(expr.data[x ,] ~ variable)[[3]], mc.cores = n.cores)
@@ -553,20 +551,19 @@ wilcoxon_test <- function(matrix, variable, is.log=T, n.cores = 8){
   
   return(results)
 }
-  
-  
-
-
-
 
 
 kruskal_wallis_test <- function(matrix, variable, is.log=T, n.cores=8, pval_adj_method = 'BH', sort_by = NULL){
   # Taking a matrix of data and a vector of categorical variables, calculate Kruskal Wallis chisq value and P values for each feature.
   # Note that if you put is.log=False, we'll transform it first and then do the ANOVA.
   
+  if (!is.null(sort_by)) {
+    if (!sort_by %in% colnames(k.test)){
+      stop("The column you want to sort by doesn't exist. You can choose from:
+       'kruskal_wallis_chisq','PValue','Adj.PValue','Mean'.")
+    }}
+  
   data <- matrix
-  if (!is.matrix(data)){
-    if (!is.data.frame(data)){ stop(paste0("We detect your data is a '",type(matrix),"' not a matrix or dataframe. Please double check"))}}
   if (is.log) data <- data
   else {data <- log(data + 1)}
   means <- rowMeans(data)
@@ -582,24 +579,9 @@ kruskal_wallis_test <- function(matrix, variable, is.log=T, n.cores=8, pval_adj_
   
   rownames(k.test) <- rownames(matrix)
   
-  if (!is.null(sort_by)) {
-    if (!sort_by %in% colnames(k.test)){stop("The column you want to sort by doesn't exist. You can choose from:
-                                              'kruskal_wallis_chisq','PValue','Adj.PValue','Mean'.")}
-    else {k.test <- k.test[order(k.test[[sort_by]]),]}
-    }
+  if (!is.null(sort_by)){k.test <- k.test[order(k.test[[sort_by]]),]}
   
   return(k.test)
-}
-
-
-
-ScheirerRayHare_test <- function(matrix, variable_1, variable_2, is.log=T, n.cores=8, pval_adj_method = 'BH', sort_by = NULL){
-  # Non-parametric version of the two-way ANOVA. requires the rcompanion package.
-  
-  
-  
-  
-  
 }
 
 
